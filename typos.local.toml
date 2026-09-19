@@ -1,0 +1,21 @@
+# Repository-specific identifiers, quotations and deliberate fixtures.
+
+schema = 1
+
+[oxford]
+stems = []
+
+[words]
+accepted = ["mold", "Polonius"]
+
+[words.corrections]
+
+[patterns]
+ignore = [
+  # Inline code spans were masked by the previous dictionary snapshot; kept
+  # until the shared dictionary rules on it.
+  '`[^`\n]+`',
+]
+
+[files]
+exclude = []
