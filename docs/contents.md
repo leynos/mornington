@@ -3,6 +3,15 @@
 [Documentation contents](contents.md) is the index for Mornington's
 documentation set.
 
+## Product definition and design
+
+- [Terms of reference](terms-of-reference.md) defines users, goals, scope,
+  acceptance criteria, assumptions, and open product questions.
+- [Technical design](mornington-design.md) specifies the proposed application,
+  behavioural storage contracts, identity, thread map, and local hosting.
+- [ADR 001: Behavioural storage ports](adr-001-behavioural-storage-ports.md)
+  records the RouchDB direction and the boundary for future adapters.
+
 ## Project guides
 
 - [User guide](users-guide.md) explains how to use the generated project and
