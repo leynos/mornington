@@ -480,10 +480,9 @@ replay. Permission contraction always takes effect on subsequent checks.
 
 ### 7.2 CLI and configuration
 
-This draft uses `mornington` to match this repository's package and build
-target; the predecessor proposal used `converse`. Final executable naming is an
-open product decision, not an instruction to rename the current crate. The
-proposed command families are:
+The installed command is `mornington`, matching this repository's package and
+build target. This naming decision supersedes the predecessor proposal's
+`converse` command name. The proposed command families are:
 
 ```plaintext
 mornington auth login|logout
@@ -770,7 +769,7 @@ failure cases; use pairwise deployment/configuration cases plus explicit
 high-risk combinations such as revocation during a poll after restart. No test
 matrix proves arbitrary hardware failures or unbounded workloads. The
 [terms of reference](terms-of-reference.md#9-open-questions-and-handoff) tracks
-unsettled naming, host support, corpus, and retention decisions.
+unsettled host support, corpus, and retention decisions.
 
 ## References
 

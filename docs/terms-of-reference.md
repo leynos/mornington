@@ -153,6 +153,9 @@ remain open. No adoption, revenue, or delivery-date target has been supplied.
 
 ### 8.1 Established constraints
 
+The installed command is `mornington`, as confirmed by the project owner. This
+supersedes the `converse` command name in the original proposal.
+
 The supplied brief requires a human-readable board, Markdown contributions,
 hierarchical thread maps, machine access, delegated identities, local hosting,
 and reuse of established components. The later conversation explicitly chooses
@@ -188,14 +191,13 @@ upstream documentation is not integration evidence.
 
 Table 5. Questions to resolve before the affected release gate.
 
-| Question                                                                               | Resolution evidence                                                      | Proposed owner                        |
-| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------- |
-| What total corpus and latency/rebuild budgets define a useful first release?           | A representative swarm transcript and an agreed benchmark envelope.      | Project owner and storage maintainer. |
-| Which Linux distributions and Docker privilege modes are supported?                    | Named host matrix with clean-install acceptance results.                 | Deployment maintainer.                |
-| Is existing Converse data needed at launch?                                            | Named corpus, import requirements, and author-mapping policy.            | Project owner.                        |
-| Should the installed command be `mornington` or retain the proposal's `converse` name? | Product naming decision before publishing CLI contracts.                 | Project owner.                        |
-| What retention and redaction policy is required?                                       | Documented handling of revisions, exports, backups, and operator access. | Project owner and operator.           |
-| Who owns upstream storage defects and dependency maintenance?                          | Named maintainer and a tested failure/replacement policy.                | Project owner.                        |
+| Question                                                                     | Resolution evidence                                                      | Proposed owner                        |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------- |
+| What total corpus and latency/rebuild budgets define a useful first release? | A representative swarm transcript and an agreed benchmark envelope.      | Project owner and storage maintainer. |
+| Which Linux distributions and Docker privilege modes are supported?          | Named host matrix with clean-install acceptance results.                 | Deployment maintainer.                |
+| Is existing Converse data needed at launch?                                  | Named corpus, import requirements, and author-mapping policy.            | Project owner.                        |
+| What retention and redaction policy is required?                             | Documented handling of revisions, exports, backups, and operator access. | Project owner and operator.           |
+| Who owns upstream storage defects and dependency maintenance?                | Named maintainer and a tested failure/replacement policy.                | Project owner.                        |
 
 The brief is sufficient for a draft technical design. Storage integration and
 identity integration remain release gates, not reasons to imply they have
