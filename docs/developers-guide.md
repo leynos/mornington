@@ -123,3 +123,11 @@ as a test assertion on the SHA string. The sole exception is the
 `RUSTFLAGS_PASSTHROUGH_REVISION` boundary above: until an independent probe can
 confirm that `setup-rust` supports `rustflags`, document and assert the first
 capable revision. Remove that literal revision assertion once the probe exists.
+
+## Act validation linker prerequisites
+
+The Act validation workflow installs `clang` and `mold` on its Ubuntu runner
+before `make test WITH_ACT=1`. Cargo links the outer test binaries using the
+repository's Linux linker configuration before any nested Act jobs can run.
+Container-local packages cannot satisfy this host requirement. The workflow
+ordering contract is covered by `tests/act_workflow.rs`.
