@@ -73,6 +73,9 @@ ______________________________________________________________________
 
 ## Learn more
 
+- [Roadmap](docs/roadmap.md): delivery slices, acceptance gates, and the next
+  legal moves.
+
 - [Terms of reference](docs/terms-of-reference.md): purpose, users, scope, and
   open questions.
 - [Technical design](docs/mornington-design.md): architecture, storage,

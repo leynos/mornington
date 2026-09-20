@@ -5,6 +5,9 @@ documentation set.
 
 ## Product definition and design
 
+- [Roadmap](roadmap.md) sequences GIST delivery slices, dependency gates, and
+  deferred scope.
+
 - [Terms of reference](terms-of-reference.md) defines users, goals, scope,
   acceptance criteria, assumptions, and open product questions.
 - [Technical design](mornington-design.md) specifies the proposed application,
