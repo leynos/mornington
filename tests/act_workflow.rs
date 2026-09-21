@@ -92,6 +92,13 @@ fn act_validation_verifies_linkers_before_running_tests() {
         test_step
             .lines()
             .map(str::trim)
+            .any(|line| line == "GITHUB_TOKEN: ${{ github.token }}"),
+        "Act validation must pass GitHub's job token into the nested workflow"
+    );
+    assert!(
+        test_step
+            .lines()
+            .map(str::trim)
             .any(|line| line == "run: make test WITH_ACT=1"),
         "Act validation must run Cargo's Act-enabled test path after linker verification"
     );
@@ -114,7 +121,7 @@ fn act_enabled_tests_execute_the_ci_workflow() {
     assert!(
         act_validation.lines().map(str::trim).any(|line| line
             == "act pull_request --workflows .github/workflows/ci.yml --job build-test \
-                --platform ubuntu-latest=catthehacker/ubuntu:act-latest"),
+                --platform ubuntu-latest=catthehacker/ubuntu:act-latest --secret GITHUB_TOKEN"),
         "WITH_ACT=1 must execute CI's build-test job through act without an interactive image \
          prompt"
     );

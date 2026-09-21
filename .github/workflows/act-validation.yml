@@ -37,4 +37,6 @@ jobs:
       - name: Check Docker runtime
         run: docker info
       - name: Run tests with act validation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: make test WITH_ACT=1
