@@ -116,13 +116,34 @@ fn act_validation_verifies_linkers_before_running_tests() {
 #[test]
 fn act_enabled_tests_execute_the_ci_workflow() {
     let makefile = include_str!("../Makefile");
+    let ci_workflow = include_str!("../.github/workflows/ci.yml");
     let act_validation = make_conditional_body(makefile, "$(WITH_ACT),1");
 
     assert!(
         act_validation.lines().map(str::trim).any(|line| line
             == "act pull_request --workflows .github/workflows/ci.yml --job build-test \
-                --platform ubuntu-latest=catthehacker/ubuntu:act-latest --secret GITHUB_TOKEN"),
+                --platform ubuntu-latest=catthehacker/ubuntu:act-latest --secret GITHUB_TOKEN \
+                --env ACT=true"),
         "WITH_ACT=1 must execute CI's build-test job through act without an interactive image \
          prompt"
+    );
+    assert!(
+        ci_workflow
+            .lines()
+            .map(str::trim)
+            .any(|line| line == "use-sccache: ${{ env.ACT != 'true' }}"),
+        "the nested Act run must disable sccache while regular CI retains it"
+    );
+    assert!(
+        ci_workflow
+            .contains("- name: Test in Act\n        if: env.ACT == 'true'\n        run: make test"),
+        "the nested Act run must execute the CI test target without coverage artefact upload"
+    );
+    assert!(
+        ci_workflow.contains(
+            "- name: Test and Measure Coverage\n        if: env.ACT != 'true'\n        uses: \
+             leynos/shared-actions"
+        ),
+        "regular CI must retain its coverage measurement workflow"
     );
 }
