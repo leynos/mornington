@@ -68,6 +68,13 @@ fn act_validation_verifies_linkers_before_running_tests() {
     let (test_step, test_step_offset) = workflow_step(workflow, "Run tests with act validation");
 
     assert!(
+        workflow
+            .lines()
+            .map(str::trim)
+            .any(|line| line == "ACT_VERSION: v0.2.81"),
+        "Act validation must install the release that supports Node 24 actions"
+    );
+    assert!(
         linker_verification_step
             .lines()
             .map(str::trim)

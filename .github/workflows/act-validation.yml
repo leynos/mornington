@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: read
     env:
-      ACT_VERSION: v0.2.80
+      ACT_VERSION: v0.2.81
       CARGO_TERM_COLOR: always
     steps:
       - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
