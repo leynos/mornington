@@ -26,9 +26,10 @@ The main `.github/workflows/ci.yml` workflow deliberately does not run
 container-backed checks in parallel. For opt-in local validation, install Act
 and Docker before running `make test WITH_ACT=1`: this path invokes Act against
 `.github/workflows/ci.yml` and executes its `build-test` job in Docker. The
-outer Cargo tests still link on the host first, so the host must provide the
-configured `clang` and `mold` linkers even though the CI job runs in a
-container.
+Makefile maps `ubuntu-latest` to `catthehacker/ubuntu:act-latest` so Act does
+not prompt for an image interactively. Outer Cargo tests still link on the
+host first, so the host must provide the configured `clang` and `mold` linkers
+even though the CI job runs in a container.
 
 A scheduled `.github/workflows/mutation-testing.yml` workflow also runs
 `cargo-mutants` via the shared reusable workflow, daily and on manual

@@ -105,11 +105,10 @@ fn act_enabled_tests_execute_the_ci_workflow() {
     let act_validation = make_conditional_body(makefile, "$(WITH_ACT),1");
 
     assert!(
-        act_validation
-            .lines()
-            .map(str::trim)
-            .any(|line| line
-                == "act pull_request --workflows .github/workflows/ci.yml --job build-test"),
-        "WITH_ACT=1 must execute CI's build-test job through act"
+        act_validation.lines().map(str::trim).any(|line| line
+            == "act pull_request --workflows .github/workflows/ci.yml --job build-test \
+                --platform ubuntu-latest=catthehacker/ubuntu:act-latest"),
+        "WITH_ACT=1 must execute CI's build-test job through act without an interactive image \
+         prompt"
     );
 }
