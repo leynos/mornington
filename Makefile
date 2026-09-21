@@ -46,6 +46,9 @@ test: export RUSTFLAGS := $(DEV_RUST_FLAGS)
 test: ## Run tests with warnings treated as errors
 	$(CARGO) $(TEST_CMD) $(TEST_FLAGS) $(BUILD_JOBS)
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" $(CARGO) test --doc --workspace --all-features
+ifeq ($(WITH_ACT),1)
+	act pull_request --workflows .github/workflows/ci.yml --job build-test
+endif
 
 target/%/$(TARGET): ## Build binary in debug or release mode
 	RUSTFLAGS="$(DEV_RUST_FLAGS)" $(CARGO) build $(BUILD_JOBS) $(if $(findstring release,$(@)),--release) --bin $(TARGET)

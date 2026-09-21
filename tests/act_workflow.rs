@@ -12,6 +12,21 @@ fn workflow_step<'workflow>(workflow: &'workflow str, name: &str) -> (&'workflow
     (step, preceding_workflow.len())
 }
 
+fn make_conditional_body<'makefile>(makefile: &'makefile str, condition: &str) -> &'makefile str {
+    let marker = format!("ifeq ({condition})\n");
+    let Some((_, remaining_makefile)) = makefile.split_once(&marker) else {
+        panic!("the Makefile must retain the required conditional: {condition}");
+    };
+    let Some(body) = remaining_makefile
+        .split_once("\nendif")
+        .map(|(body, _)| body)
+    else {
+        panic!("the Makefile conditional must terminate with endif: {condition}");
+    };
+
+    body
+}
+
 /// The outer Cargo test process links binaries before any nested Act execution.
 #[test]
 fn act_validation_installs_the_configured_linker_before_tests() {
@@ -49,6 +64,7 @@ fn act_validation_verifies_linkers_before_running_tests() {
     let workflow = include_str!("../.github/workflows/act-validation.yml");
     let (linker_verification_step, linker_verification_step_offset) =
         workflow_step(workflow, "Verify Linux linker prerequisites");
+    let (_, act_installation_step_offset) = workflow_step(workflow, "Install act");
     let (test_step, test_step_offset) = workflow_step(workflow, "Run tests with act validation");
 
     assert!(
@@ -75,5 +91,25 @@ fn act_validation_verifies_linkers_before_running_tests() {
     assert!(
         linker_verification_step_offset < test_step_offset,
         "the outer runner must verify linkers before it runs the Act-enabled Cargo tests"
+    );
+    assert!(
+        act_installation_step_offset < test_step_offset,
+        "the outer runner must install act before it runs the Act-enabled Cargo tests"
+    );
+}
+
+/// The Act-enabled test path executes the generated CI workflow's build-test job.
+#[test]
+fn act_enabled_tests_execute_the_ci_workflow() {
+    let makefile = include_str!("../Makefile");
+    let act_validation = make_conditional_body(makefile, "$(WITH_ACT),1");
+
+    assert!(
+        act_validation
+            .lines()
+            .map(str::trim)
+            .any(|line| line
+                == "act pull_request --workflows .github/workflows/ci.yml --job build-test"),
+        "WITH_ACT=1 must execute CI's build-test job through act"
     );
 }
