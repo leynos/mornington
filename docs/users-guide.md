@@ -109,10 +109,11 @@ The generated `Makefile` exposes these public targets:
 - `make spelling` runs the shared `typos-config-builder` gate. It regenerates
   `typos.toml` from the live shared dictionary and the `typos.local.toml`
   overlay, then checks Markdown prose, so `typos.toml` is never drift checked
-  in CI. The gate enumerates its inputs with `git ls-files`, so the project
-  must be a Git repository with its files staged; `make spelling` fails with
-  that instruction when it is not. The first run writes `typos.toml`, which is
-  generated but tracked output: commit it alongside the rest of the project.
+  in CI. The generated file is ignored; keep repository-specific exceptions in
+  the tracked `typos.local.toml` overlay. The gate enumerates its inputs with
+  `git ls-files`, so the project must be a Git repository with its files
+  staged; `make spelling` fails with that instruction when it is not. The first
+  run writes the ignored `typos.toml` in the working tree.
 - `make nixie` validates Mermaid diagrams.
 
 Install `clang`, `lld`, `mold`, `python3`, and `cargo-audit` before running the

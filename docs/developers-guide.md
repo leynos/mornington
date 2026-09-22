@@ -23,7 +23,13 @@ manually. `make coverage` uses `cargo llvm-cov` with `lld`.
 GitHub Actions Act validation lives in `.github/workflows/act-validation.yml`.
 The main `.github/workflows/ci.yml` workflow deliberately does not run
 `make test WITH_ACT=1`; the separate Act workflow runs those slower
-container-backed checks in parallel.
+container-backed checks in parallel. For opt-in local validation, install Act
+and Docker before running `make test WITH_ACT=1`: this path invokes Act against
+`.github/workflows/ci.yml` and executes its `build-test` job in Docker. The
+Makefile maps `ubuntu-latest` to `catthehacker/ubuntu:act-latest` so Act does
+not prompt for an image interactively. Outer Cargo tests still link on the
+host first, so the host must provide the configured `clang` and `mold` linkers
+even though the CI job runs in a container.
 
 A scheduled `.github/workflows/mutation-testing.yml` workflow also runs
 `cargo-mutants` via the shared reusable workflow, daily and on manual
@@ -123,3 +129,15 @@ as a test assertion on the SHA string. The sole exception is the
 `RUSTFLAGS_PASSTHROUGH_REVISION` boundary above: until an independent probe can
 confirm that `setup-rust` supports `rustflags`, document and assert the first
 capable revision. Remove that literal revision assertion once the probe exists.
+
+## Act validation linker prerequisites
+
+The Act validation workflow installs and probes `clang` and `mold` on its
+Ubuntu runner before `make test WITH_ACT=1`. Cargo links the outer test binaries
+using the repository's Linux linker configuration before any nested Act jobs can
+run. Container-local packages cannot satisfy this host requirement. The
+workflow ordering contract is covered by `tests/act_workflow.rs`. The nested
+Act run disables the shared `setup-rust` sccache accelerator and
+skips coverage and artefact upload because Act containers cannot provide the
+GitHub Actions cache or runtime-token services those steps require. It runs
+`make test` instead; normal CI retains sccache and coverage.

@@ -26,6 +26,7 @@ jobs:
         uses: leynos/shared-actions/.github/actions/setup-rust@47b337e4f230b591891656534d4ffad868131740
         with:
           rustflags: -Zpolonius=next
+          use-sccache: ${{ env.ACT != 'true' }}
       - name: Log Rust compiler configuration
         run: |-
           rustc --version
@@ -99,12 +100,17 @@ jobs:
       - name: Lint
         run: make lint
       - name: Log coverage linker configuration
+        if: env.ACT != 'true'
         run: |
           echo "Coverage linker: clang"
           echo "Coverage RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld"
           echo "Coverage CFLAGS: -fuse-ld=lld"
           echo "Coverage LDFLAGS: -fuse-ld=lld"
+      - name: Test in Act
+        if: env.ACT == 'true'
+        run: make test
       - name: Test and Measure Coverage
+        if: env.ACT != 'true'
         uses: leynos/shared-actions/.github/actions/generate-coverage@47b337e4f230b591891656534d4ffad868131740
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
@@ -135,4 +141,3 @@ jobs:
       #         project-url: https://api.codescene.io/v2/projects/<project-id>
       #         access-token: ${{ env.CS_ACCESS_TOKEN }}
       #         installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
-
