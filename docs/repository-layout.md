@@ -63,6 +63,13 @@ compact and omits build output such as `target/`.
 - `.github/workflows/release.yml`: Builds and publishes binary release
   artefacts for the application flavour.
 
+- `docs/terms-of-reference.md`: Defines the product problem, scope, and
+  outcomes.
+- `docs/mornington-design.md`: Describes the proposed architecture and
+  contracts; its proposed source modules are not an inventory of implemented
+  modules.
+- `docs/adr-*.md`: Records substantive architecture decisions, beginning with
+  the behavioural storage boundary.
 - `docs/`: Holds long-lived reference documentation, guides, style rules, and
   design material.
 - `docs/contents.md`: Indexes the documentation set and should be updated when

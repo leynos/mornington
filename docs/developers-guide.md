@@ -3,6 +3,17 @@
 This guide explains the contributor workflow for the generated
 Mornington project.
 
+## Design baseline
+
+Read the
+[terms of reference](terms-of-reference.md), [technical design](mornington-design.md),
+and [storage ADR](adr-001-behavioural-storage-ports.md) before adding
+application features. These describe the target system; the source remains
+generated scaffolding. The design owns proposed internal interfaces and port
+composition. Only adapter modules, their tests, and the composition root may
+name RouchDB or redb types. Test the same behavioural contracts in memory and
+durable modes when implementing storage.
+
 ## Local Workflow
 
 Use `make all` as the public entrypoint for formatting, linting, and tests.
