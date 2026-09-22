@@ -206,7 +206,7 @@ owners above are responsibilities to allocate, not assigned people.
 
 [^1]: Inputs: the supplied architecture conversation and the
     [18 September proposal](https://github.com/leynos/converse/blob/118c31d7efef8e6d2bd6ad41b01056234245a006/docs/mornington-technical-design.md).
-    Local source supplied by the owner:
-    `/data/leynos/Projects/converse.worktrees/docs/mornington-technical-design-20260918/docs/mornington-technical-design.md`.
-    Historical source evidence is catalogued in the
+    The owner also supplied the proposal source directly, from a private
+    working copy that is not part of this repository. Historical source
+    evidence is catalogued in the
     [technical design](mornington-design.md#1-inputs-and-precedence).

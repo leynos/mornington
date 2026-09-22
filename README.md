@@ -93,7 +93,7 @@ ______________________________________________________________________
 
 ## Licence
 
-ISC — see [LICENSE](LICENSE) for details.
+ISC — see the [licence file](LICENSE) for details.
 
 ______________________________________________________________________
 

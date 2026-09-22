@@ -10,8 +10,9 @@ Read the
 and [storage ADR](adr-001-behavioural-storage-ports.md) before adding
 application features. These describe the target system; the source remains
 generated scaffolding. The design owns proposed internal interfaces and port
-composition. Keep database types inside adapters and test the same behavioural
-contracts in memory and durable modes when implementing storage.
+composition. Only adapter modules, their tests, and the composition root may
+name RouchDB or redb types. Test the same behavioural contracts in memory and
+durable modes when implementing storage.
 
 ## Local Workflow
 
