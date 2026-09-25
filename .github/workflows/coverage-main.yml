@@ -1,27 +1,39 @@
 name: Coverage (main)
 
-# CodeScene accepts `cs-coverage upload` only for analysed branches, so
-# main-branch coverage is uploaded here on push; pull requests generate
-# coverage (and, once the project's gate is enabled, run the changed-line
-# `cs-coverage check`) in ci.yml instead. This workflow also advances the
-# coverage ratchet baseline: caches saved on main are readable by every
-# pull-request run, so the baseline written here is the one PR ratchet
-# checks compare against.
+# This workflow is the repository's only CodeScene caller. CodeScene
+# accepts `cs-coverage upload` only for analysed branches, so main-branch
+# coverage is uploaded here; pull requests generate coverage in ci.yml for
+# their own ratchet and never receive the token or contact CodeScene. This
+# workflow also advances the coverage ratchet baseline: caches saved on main
+# are readable by every pull-request run, so the baseline written here is the
+# one a pull request's ratchet compares against.
 #
 # workflow_dispatch is mandatory, not a convenience: merges performed by
 # the automerge workflow's GITHUB_TOKEN do not fire push-event workflows,
 # so automerged changes to main only receive coverage when this workflow
-# is dispatched. The upload is guarded on CS_ACCESS_TOKEN, so a generated
-# repository that has not yet been onboarded to CodeScene skips it cleanly.
+# is dispatched from main. The token is an environment secret of the
+# main-only `codescene` environment, which the job declares.
 
 'on':
   push:
     branches: [main]
   workflow_dispatch:
 
+# Publishers queue rather than race or cancel. Runs in the group never
+# overlap, and a newer trigger replaces an older pending run; nothing here
+# promises that runs start in commit order. The coverage action saves the
+# ratchet baseline only on a push, so a dispatch uploads coverage but leaves
+# the baseline where the last completed push left it.
+concurrency:
+  group: coverage-main-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   coverage-upload:
     runs-on: ubuntu-latest
+    # CS_ACCESS_TOKEN is a secret of this environment, which admits main
+    # alone, so no other ref can reach the token.
+    environment: codescene
     permissions:
       contents: read
     env:
@@ -58,7 +70,7 @@ jobs:
           echo "Coverage CFLAGS: -fuse-ld=lld"
           echo "Coverage LDFLAGS: -fuse-ld=lld"
       - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@47b337e4f230b591891656534d4ffad868131740
+        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
           RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld
@@ -82,9 +94,11 @@ jobs:
       # does not check the ref itself.
       - name: Upload coverage data to CodeScene
         if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@47b337e4f230b591891656534d4ffad868131740
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        # No checksum input: the uploader pins cs-coverage through its own
+        # manifest and rejects a non-empty `installer-checksum`.
         with:
           format: lcov
+          mode: upload
           access-token: ${{ secrets.CS_ACCESS_TOKEN }}
-          installer-checksum: ${{ vars.CODESCENE_CLI_SHA256 }}
 
