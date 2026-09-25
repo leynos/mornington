@@ -60,9 +60,11 @@ with no `if:` and no `env`. The upload runs only when that output is `true` and
 `github.ref` is `refs/heads/main`, takes the token as its `access-token` input
 so the workflow binds it in no `env` of its own, and uploads with
 `mode: upload` and no checksum input. Publisher runs share the concurrency group
-`coverage-main-${{ github.ref }}` and never cancel one another. A merge made
-by the Dependabot automerge workflow's `GITHUB_TOKEN` fires no push event, so
-it publishes nothing until a dispatch from `main` or the next push.
+`coverage-main-${{ github.ref }}` with `cancel-in-progress: false`: a running
+publisher is never cancelled, and a newer trigger replaces an older pending
+run, so the newest trigger's run is the one that publishes. A merge made by the
+Dependabot automerge workflow's `GITHUB_TOKEN` fires no push event, so it
+publishes nothing until a dispatch from `main` or the next push.
 `tests/codescene_publisher.rs` holds the shape over the committed workflows.
 
 ## Tooling

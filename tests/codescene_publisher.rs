@@ -131,19 +131,37 @@ const PUBLISHER_QUEUE: [&str; 3] = [
     "cancel-in-progress: false",
 ];
 
-/// Returns the `uses:` line of the one shared coverage step in `workflow`.
-fn coverage_action(workflow: &str) -> &str {
+/// Returns whether `uses` pins its action to a full 40-character commit SHA.
+///
+/// Shape rather than value: Dependabot bumps these pins, and a mutable ref
+/// such as `@main` would let both lanes agree while measuring anything.
+fn is_sha_pinned(uses: &str) -> bool {
+    uses.rsplit_once('@').is_some_and(|(_, reference)| {
+        reference.len() == 40
+            && reference
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    })
+}
+
+/// Returns the `uses:` line of the one step in `workflow` calling `action`.
+fn action_line<'workflow>(workflow: &'workflow str, action: &str) -> &'workflow str {
+    let marker = format!("/.github/actions/{action}@");
     let found: Vec<&str> = configuration_lines(workflow)
         .into_iter()
-        .filter(|line| line.contains("/.github/actions/generate-coverage@"))
+        .filter(|line| line.contains(&marker))
         .collect();
-    assert_eq!(
-        found.len(),
-        1,
-        "expected one generate-coverage step: {found:?}"
+    assert_eq!(found.len(), 1, "expected one {action} step: {found:?}");
+    let line = found.first().copied().unwrap_or_default();
+    assert!(
+        is_sha_pinned(line),
+        "expected a full commit SHA pin: {line}"
     );
-    found.first().copied().unwrap_or_default()
+    line
 }
+
+/// Returns the `uses:` line of the one shared coverage step in `workflow`.
+fn coverage_action(workflow: &str) -> &str { action_line(workflow, "generate-coverage") }
 
 #[test]
 fn the_publisher_queues_on_one_group_per_ref() {
@@ -168,6 +186,21 @@ fn the_publisher_job_runs_in_the_codescene_environment() {
     assert!(
         declared.is_some() && declared < steps,
         "the publisher job must declare `environment: codescene`, whose secret the token is"
+    );
+}
+
+#[test]
+fn the_upload_calls_the_pinned_shared_uploader() {
+    let body = step_lines(PUBLISHER, "Upload coverage data to CodeScene");
+    let uploader = action_line(PUBLISHER, "upload-codescene-coverage");
+    assert!(
+        uploader
+            .starts_with("uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@"),
+        "the upload must call the shared uploader: {uploader}"
+    );
+    assert!(
+        body.contains(&uploader),
+        "the pinned uploader must be the upload step's own action"
     );
 }
 
