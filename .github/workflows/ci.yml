@@ -108,7 +108,7 @@ jobs:
         run: make test
       - name: Test and Measure Coverage
         if: env.ACT != 'true'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@22c1a57865e42ba7e2ca4f88ae49fa6f81f58013
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
           RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld
