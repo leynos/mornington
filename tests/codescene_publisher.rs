@@ -1,4 +1,10 @@
-//! Contract for where the `CodeScene` token may appear in the publisher.
+//! Contract for the `CodeScene` publisher and the pull-request lane beside it.
+//!
+//! `coverage-main.yml` is the only `CodeScene` caller. Its runs queue on one
+//! group per ref, its job runs in the main-only `codescene` environment that
+//! holds the token, it uploads with `mode: upload` and no checksum input, and
+//! it measures with the same `generate-coverage` revision as the pull-request
+//! lane, which ratchets against its baseline and names no `CodeScene` surface.
 //!
 //! The upload is `upload-codescene-coverage`, a composite action whose nested
 //! steps inherit the calling step's `env`, so `coverage-main.yml` binds the
@@ -112,5 +118,132 @@ fn the_token_appears_exactly_where_it_is_used() {
         mentions,
         vec![CHECK_RUN, UPLOAD_INPUT],
         "the token may be named only by the check's command and the upload's input"
+    );
+}
+
+/// The pull-request workflow, as committed.
+const PULL_REQUEST_LANE: &str = include_str!("../.github/workflows/ci.yml");
+
+/// The publisher's concurrency block: one group per ref, never cancelled.
+const PUBLISHER_QUEUE: [&str; 3] = [
+    "concurrency:",
+    "group: coverage-main-${{ github.ref }}",
+    "cancel-in-progress: false",
+];
+
+/// Returns whether `uses` pins its action to a full 40-character commit SHA.
+///
+/// Shape rather than value: Dependabot bumps these pins, and a mutable ref
+/// such as `@main` would let both lanes agree while measuring anything.
+fn is_sha_pinned(uses: &str) -> bool {
+    uses.rsplit_once('@').is_some_and(|(_, reference)| {
+        reference.len() == 40
+            && reference
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    })
+}
+
+/// Returns the `uses:` line of the one step in `workflow` calling `action`.
+fn action_line<'workflow>(workflow: &'workflow str, action: &str) -> &'workflow str {
+    let marker = format!("/.github/actions/{action}@");
+    let found: Vec<&str> = configuration_lines(workflow)
+        .into_iter()
+        .filter(|line| line.contains(&marker))
+        .collect();
+    assert_eq!(found.len(), 1, "expected one {action} step: {found:?}");
+    let line = found.first().copied().unwrap_or_default();
+    assert!(
+        is_sha_pinned(line),
+        "expected a full commit SHA pin: {line}"
+    );
+    line
+}
+
+/// Returns the `uses:` line of the one shared coverage step in `workflow`.
+fn coverage_action(workflow: &str) -> &str { action_line(workflow, "generate-coverage") }
+
+#[test]
+fn the_publisher_queues_on_one_group_per_ref() {
+    let lines = configuration_lines(PUBLISHER);
+    let queue = lines
+        .windows(PUBLISHER_QUEUE.len())
+        .filter(|window| *window == PUBLISHER_QUEUE)
+        .count();
+    assert_eq!(
+        queue, 1,
+        "the publisher must queue on one group per ref and never cancel: {PUBLISHER_QUEUE:?}"
+    );
+}
+
+#[test]
+fn the_publisher_job_runs_in_the_codescene_environment() {
+    let lines = configuration_lines(PUBLISHER);
+    let declared = lines
+        .iter()
+        .position(|line| *line == "environment: codescene");
+    let steps = lines.iter().position(|line| *line == "steps:");
+    assert!(
+        declared.is_some() && declared < steps,
+        "the publisher job must declare `environment: codescene`, whose secret the token is"
+    );
+}
+
+#[test]
+fn the_upload_calls_the_pinned_shared_uploader() {
+    let body = step_lines(PUBLISHER, "Upload coverage data to CodeScene");
+    let uploader = action_line(PUBLISHER, "upload-codescene-coverage");
+    assert!(
+        uploader
+            .starts_with("uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@"),
+        "the upload must call the shared uploader: {uploader}"
+    );
+    assert!(
+        body.contains(&uploader),
+        "the pinned uploader must be the upload step's own action"
+    );
+}
+
+#[test]
+fn the_upload_names_its_mode_and_passes_no_checksum() {
+    let body = step_lines(PUBLISHER, "Upload coverage data to CodeScene");
+    assert!(
+        body.contains(&"mode: upload"),
+        "the upload must name `mode: upload`"
+    );
+    assert!(
+        !body
+            .iter()
+            .any(|line| line.starts_with("installer-checksum:")),
+        "the uploader rejects a non-empty `installer-checksum`"
+    );
+}
+
+#[test]
+fn both_lanes_measure_with_one_coverage_revision() {
+    assert_eq!(
+        coverage_action(PUBLISHER),
+        coverage_action(PULL_REQUEST_LANE),
+        "the pull-request ratchet must read a baseline measured by the same action"
+    );
+    let lane = configuration_lines(PULL_REQUEST_LANE);
+    for input in ["with-ratchet: 'true'", "publish-artefact: 'false'"] {
+        assert!(
+            lane.contains(&input),
+            "the pull-request lane must set {input}"
+        );
+    }
+}
+
+#[test]
+fn the_pull_request_lane_names_no_codescene_surface() {
+    let text = PULL_REQUEST_LANE.to_ascii_lowercase();
+    let reaching: Vec<&str> = ["cs_access_token", "codescene.io", "cs-coverage"]
+        .into_iter()
+        .filter(|marker| text.contains(marker))
+        .collect();
+    assert!(
+        reaching.is_empty(),
+        "ci.yml must name no CodeScene token, host or command, even in a comment: {reaching:?}"
     );
 }
