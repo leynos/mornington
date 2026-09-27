@@ -13,9 +13,13 @@ git add -A
 make all
 ```
 
-The spelling gate enumerates its inputs with `git ls-files`, so `make all`,
-`make markdownlint` and `make spelling` have nothing to check until the project
-is a Git repository with its files staged.
+Each gate selects its Markdown differently. `make check-fmt` runs
+`mdtablefix --check --git --include-untracked`, which reads the tracked files
+and the untracked files Git does not ignore, so it needs a Git repository but
+not staged files. `make markdownlint` runs `markdownlint-cli2 '**/*.md'` over
+every matching file, staged or not, and then runs `make spelling`. The spelling
+gate enumerates its inputs with `git ls-files`, so it checks only files Git
+already tracks: stage new Markdown before relying on it.
 
 ## Generated Tooling
 

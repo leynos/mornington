@@ -20,8 +20,10 @@ Use `make all` as the public entrypoint for formatting, linting, and tests.
 `make lint` runs rustdoc, Clippy, and Whitaker. `make test` prefers
 `cargo nextest run` and falls back to `cargo test` when cargo-nextest is not
 available. `make check-fmt` verifies Rust formatting with
-`cargo fmt --all -- --check`, and `make fmt` formats Rust sources with nightly
-`rustfmt` and Markdown with `mdformat`. `make typecheck` type-checks without
+`cargo fmt --all -- --check` and Markdown formatting with
+`mdtablefix --check --git --include-untracked`, and `make fmt` formats Rust
+sources with nightly `rustfmt` and Markdown with `mdtablefix --in-place`
+followed by `markdownlint-cli2 --fix`. `make typecheck` type-checks without
 building via `cargo check`. `make audit` derives the Rust workspace root with
 `cargo metadata`, logs workspace member manifests, and runs `cargo audit` once
 from the workspace root. PR CI skips `make audit` and the audit-only setup when
