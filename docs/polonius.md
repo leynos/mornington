@@ -15,8 +15,8 @@ they set `RUSTFLAGS`. Release builds use the same pinned nightly and flag.
 Source builds performed outside this repository, including registry installs,
 do not inherit its toolchain or Cargo configuration. If this crate later ships
 Polonius-only source through a registry, its installation instructions must
-name both the pinned nightly and `RUSTFLAGS=-Zpolonius=next`, or direct users to
-pre-built artefacts.
+name both the pinned nightly and `RUSTFLAGS=-Zpolonius=next`, or direct users
+to pre-built artefacts.
 
 ## Borrow-centric design
 
@@ -43,8 +43,8 @@ classification preserved:
 Record verified sites below so later reviews start from evidence rather than
 re-running the same analysis.
 
-| Site | Classification | Verified nightly | Notes |
-| --- | --- | --- | --- |
+| Site     | Classification            | Verified nightly     | Notes                                             |
+| -------- | ------------------------- | -------------------- | ------------------------------------------------- |
 | None yet | Initial generated project | `nightly-2026-08-27` | Add rows as borrow-sensitive APIs are introduced. |
 
 ## Verification

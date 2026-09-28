@@ -1,12 +1,11 @@
 # User Guide
 
-This guide explains how to use the generated Mornington project after
-rendering it from the template.
+This guide explains how to use the generated Mornington project after rendering
+it from the template.
 
 ## First Steps After Rendering
 
-Initialize version control and stage the rendered files before running any
-gate:
+Initialize version control and stage the rendered files before running any gate:
 
 ```sh
 git init
@@ -14,21 +13,25 @@ git add -A
 make all
 ```
 
-The spelling gate enumerates its inputs with `git ls-files`, so `make all`,
-`make markdownlint` and `make spelling` have nothing to check until the
-project is a Git repository with its files staged.
+Each gate selects its Markdown differently. `make check-fmt` runs
+`mdtablefix --check --git --include-untracked`, which reads the tracked files
+and the untracked files Git does not ignore, so it needs a Git repository but
+not staged files. `make markdownlint` runs `markdownlint-cli2 '**/*.md'` over
+every matching file, staged or not, and then runs `make spelling`. The spelling
+gate enumerates its inputs with `git ls-files`, so it checks only files Git
+already tracks: stage new Markdown before relying on it.
 
 ## Generated Tooling
 
 Generated projects use Rust 2024, a pinned nightly toolchain, strict lint
 settings, and documented starter code. Library projects render `src/lib.rs`.
-Application projects render `src/main.rs`, `src/lib.rs`, release automation,
-and `[package.metadata.binstall]` metadata for binary installation.
+Application projects render `src/main.rs`, `src/lib.rs`, release automation, and
+`[package.metadata.binstall]` metadata for binary installation.
 
-This project enables the Polonius alpha borrow checker
-(`-Zpolonius=next`) on its dated nightly toolchain. The checked-in Cargo
-configuration supplies the flag to normal builds and editor tooling, while the
-Makefile and workflows re-state it wherever they override `RUSTFLAGS`. See the
+This project enables the Polonius alpha borrow checker (`-Zpolonius=next`) on
+its dated nightly toolchain. The checked-in Cargo configuration supplies the
+flag to normal builds and editor tooling, while the Makefile and workflows
+re-state it wherever they override `RUSTFLAGS`. See the
 [Polonius policy](polonius.md) before changing the toolchain or borrow-centric
 APIs.
 
@@ -39,8 +42,8 @@ tools expect LLVM-compatible linker behaviour.
 
 ## Validation and Environment Policy
 
-This project denies `unknown_lints`, `renamed_and_removed_lints`, `unsafe_code`,
-and `missing_docs`. Rustdoc denies `missing_crate_level_docs`,
+This project denies `unknown_lints`, `renamed_and_removed_lints`,
+`unsafe_code`, and `missing_docs`. Rustdoc denies `missing_crate_level_docs`,
 `broken_intra_doc_links`, `private_intra_doc_links`, `bare_urls`,
 `invalid_html_tags`, `invalid_codeblock_attributes`, and `unescaped_backticks`.
 Clippy denies `missing_assert_message` and uses `disallowed_methods` to reject
@@ -87,7 +90,8 @@ doctest therefore fails the command.
 The generated `Makefile` exposes these public targets:
 
 - `make all` runs formatting checks, linting, tests, and spelling checks.
-- `make check-fmt` verifies Rust formatting.
+- `make check-fmt` verifies Rust formatting and, with
+  `mdtablefix --check --git --include-untracked`, Markdown formatting.
 - `make fmt` formats Rust and Markdown sources.
 - `make lint` builds documentation, then runs Clippy and Whitaker, with every
   warning denied.
@@ -99,11 +103,12 @@ The generated `Makefile` exposes these public targets:
 - `make release` builds the release target.
 - `make coverage` writes `lcov.info` using `cargo llvm-cov` and `lld`.
 - `make audit` derives the Rust workspace root with `cargo metadata` and runs
-  `cargo audit` once from that root. In PR CI, Dependabot runs skip `make
-  audit` and the audit-only setup when `github.actor` is `dependabot[bot]`, so
-  whole-lockfile advisories do not block unrelated dependency updates. Human PRs
-  still retain the audit gate, and `.github/workflows/audit.yml` runs weekly and
-  can also be triggered manually as the compensating control.
+  `cargo audit` once from that root. In PR CI, Dependabot runs skip
+  `make audit` and the audit-only setup when `github.actor` is
+  `dependabot[bot]`, so whole-lockfile advisories do not block unrelated
+  dependency updates. Human PRs still retain the audit gate, and
+  `.github/workflows/audit.yml` runs weekly and can also be triggered manually
+  as the compensating control.
 - `make markdownlint` checks Markdown files and enforces en-GB-oxendict
   spelling.
 - `make spelling` runs the shared `typos-config-builder` gate. It regenerates
@@ -111,8 +116,9 @@ The generated `Makefile` exposes these public targets:
   overlay, then checks Markdown prose, so `typos.toml` is never drift checked
   in CI. The generated file is ignored; keep repository-specific exceptions in
   the tracked `typos.local.toml` overlay. The gate enumerates its inputs with
-  `git ls-files`, so the project must be a Git repository with its files
-  staged; `make spelling` fails with that instruction when it is not. The first
+  `git ls-files`, so the project must be a Git repository in which Git already
+  tracks some files; `make spelling` fails with that instruction when
+  `git ls-files` lists nothing, and checks only the files Git tracks. The first
   run writes the ignored `typos.toml` in the working tree.
 - `make nixie` validates Mermaid diagrams.
 
@@ -121,10 +127,10 @@ full generated workflow locally on Linux.
 
 ## Scheduled Mutation Testing
 
-Generated projects include `.github/workflows/mutation-testing.yml`, a scheduled
-GitHub Actions workflow that runs mutation testing with `cargo-mutants`. It is a
-thin caller of the shared `leynos/shared-actions` `mutation-cargo` reusable
-workflow.
+Generated projects include `.github/workflows/mutation-testing.yml`, a
+scheduled GitHub Actions workflow that runs mutation testing with
+`cargo-mutants`. It is a thin caller of the shared `leynos/shared-actions`
+`mutation-cargo` reusable workflow.
 
 Mutation testing measures test-suite quality. It introduces small changes
 (mutants) into the source and confirms the tests fail in response. A surviving
