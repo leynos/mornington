@@ -114,7 +114,7 @@ jobs:
         run: make test
       - name: Test and Measure Coverage
         if: github.event_name == 'pull_request' && env.ACT != 'true'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@ce8d747242ab3c9d58674d5838cf04c801eeb2f9
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
           RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld
