@@ -67,7 +67,16 @@ publisher is never cancelled, and a newer trigger replaces an older pending
 run, so the newest trigger's run is the one that publishes. A merge made by the
 Dependabot automerge workflow's `GITHUB_TOKEN` fires no push event, so it
 publishes nothing until a dispatch from `main` or the next push.
-`tests/codescene_publisher.rs` holds the shape over the committed workflows.
+`make test-workflow-contracts` holds the shape over the committed workflows by
+running `cv005-contracts check`, the shared contract library in
+`leynos/shared-actions` (`packages/cv005-contracts`), from a full commit named
+by `CV005_CONTRACTS_REF` in the Makefile; CI runs it in a "Check the CV-005
+contracts" step. A fix to the rules is therefore a pin bump. The target needs
+`uv`, which fetches the Python 3.13 the library runs under. The repository's
+parameters are in `.github/cv005.toml`: its `repository` name and one
+`[[pairing]]` for the pull-request coverage step, whose condition is the
+pull-request guard plus `env.ACT != 'true'`, because the Act validation run
+executes `make test` in its place (`tests/act_workflow.rs` holds that split).
 
 ## Tooling
 
@@ -92,8 +101,8 @@ Development builds use Cranelift for debug code generation. On Linux targets,
 quickly. Coverage generation uses `lld` because LLVM coverage tooling expects
 LLVM-compatible linker behaviour.
 
-Install `clang`, `lld`, `mold`, `python3`, and `cargo-audit` before running the
-full generated workflow locally on Linux.
+Install `clang`, `lld`, `mold`, `python3`, `uv`, and `cargo-audit` before
+running the full generated workflow locally on Linux.
 
 ## Spelling policy
 

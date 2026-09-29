@@ -51,6 +51,8 @@ jobs:
           globs: '**/*.md'
       - name: Setup uv
         uses: astral-sh/setup-uv@12d13f90bc3a5a1971bebad4beb09a4dfa962e91
+      - name: Check the CV-005 contracts
+        run: make test-workflow-contracts
       - name: Check spelling
         run: make spelling
       - name: Install test runner
@@ -111,7 +113,7 @@ jobs:
         if: env.ACT == 'true'
         run: make test
       - name: Test and Measure Coverage
-        if: env.ACT != 'true'
+        if: github.event_name == 'pull_request' && env.ACT != 'true'
         uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang

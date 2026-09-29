@@ -89,7 +89,8 @@ doctest therefore fails the command.
 
 The generated `Makefile` exposes these public targets:
 
-- `make all` runs formatting checks, linting, tests, and spelling checks.
+- `make all` runs formatting checks, linting, tests, and spelling checks, plus
+  the workflow contract check.
 - `make check-fmt` verifies Rust formatting and, with
   `mdtablefix --check --git --include-untracked`, Markdown formatting.
 - `make fmt` formats Rust and Markdown sources.
@@ -109,6 +110,9 @@ The generated `Makefile` exposes these public targets:
   dependency updates. Human PRs still retain the audit gate, and
   `.github/workflows/audit.yml` runs weekly and can also be triggered manually
   as the compensating control.
+- `make test-workflow-contracts` runs the shared CV-005 CodeScene contract
+  (`cv005-contracts check`, pinned in the Makefile) over the repository's
+  workflows. It needs `uv`, which fetches Python 3.13 itself.
 - `make markdownlint` checks Markdown files and enforces en-GB-oxendict
   spelling.
 - `make spelling` runs the shared `typos-config-builder` gate. It regenerates
@@ -122,8 +126,8 @@ The generated `Makefile` exposes these public targets:
   run writes the ignored `typos.toml` in the working tree.
 - `make nixie` validates Mermaid diagrams.
 
-Install `clang`, `lld`, `mold`, `python3`, and `cargo-audit` before running the
-full generated workflow locally on Linux.
+Install `clang`, `lld`, `mold`, `python3`, `uv`, and `cargo-audit` before
+running the full generated workflow locally on Linux.
 
 ## Scheduled Mutation Testing
 
