@@ -141,8 +141,8 @@ fn act_enabled_tests_execute_the_ci_workflow() {
     );
     assert!(
         ci_workflow.contains(
-            "- name: Test and Measure Coverage\n        if: env.ACT != 'true'\n        uses: \
-             leynos/shared-actions"
+            "- name: Test and Measure Coverage\n        if: github.event_name == 'pull_request' \
+             && env.ACT != 'true'\n        uses: leynos/shared-actions"
         ),
         "regular CI must retain its coverage measurement workflow"
     );
