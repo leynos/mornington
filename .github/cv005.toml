@@ -1,0 +1,10 @@
+repository = "leynos/mornington"
+
+# The pull-request lane skips coverage under `act`, where `make test` runs
+# instead (tests/act_workflow.rs holds that split), so its condition is the
+# pull-request guard plus the `act` one.
+[[pairing]]
+lane = "ci.yml:build-test:Test and Measure Coverage"
+publisher = "coverage-main.yml:coverage-upload:Test and Measure Coverage"
+differs = []
+guards = ["env.ACT != 'true'"]
