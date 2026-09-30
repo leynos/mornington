@@ -109,6 +109,10 @@ running the full generated workflow locally on Linux.
 Markdown uses en-GB-oxendict spelling enforced by the shared
 `typos-config-builder` gate. Run `make spelling`.
 
+`TYPOS_CONFIG_BUILDER_VERSION` in the `Makefile` pins the
+`typos-config-builder` release the gate runs (currently `v0.1.3`). Raise it
+together with the regenerated `typos.toml`, never on its own.
+
 `typos.toml` is generated output. The gate regenerates it on every run from the
 live shared estate dictionary and the `typos.local.toml` overlay, so a word
 added to the shared dictionary needs no change here. Because the dictionary is
