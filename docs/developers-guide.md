@@ -18,14 +18,19 @@ durable modes when implementing storage.
 
 Use `make all` as the public entrypoint for formatting, linting, and tests. It
 recurses through each cache-consuming gate in order, even under `make -j`.
-`make lint` runs rustdoc and Clippy, then Whitaker, in that order. `make test`
-prefers `cargo nextest run` and falls back to `cargo test` when cargo-nextest
-is not available. `make check-fmt` verifies Rust formatting with
-`cargo fmt --all -- --check` and Markdown formatting with
-`mdtablefix --check --git --include-untracked`, and `make fmt` formats Rust
-sources with nightly `rustfmt` and Markdown with `mdtablefix --in-place`
-followed by `markdownlint-cli2 --fix`. `make typecheck` type-checks without
-building via `cargo check`. `make audit` derives the Rust workspace root with
+`make lint` runs rustdoc and Clippy, Whitaker, and the Python gateway in that
+order. The Python gateway runs Ruff, Pylint with all pinned `df12-python-lints`
+messages, ambrleaks, and Interrogate on every repository Python module under
+`.github`, `tests`, `scripts`, `benches`, and `benchmarks`. `make test` runs
+the Python workflow contracts before it prefers `cargo nextest run` and falls
+back to `cargo test` when cargo-nextest is not available. `make check-fmt`
+verifies Rust formatting with `cargo fmt --all -- --check` and Markdown
+formatting with `mdtablefix --check --git --include-untracked`, and checks
+Python formatting with Ruff. `make fmt` formats Rust and Python sources before
+formatting Markdown with `mdtablefix --in-place` followed by
+`markdownlint-cli2 --fix`. `make typecheck` runs ty on the same Python
+inventory and checks Rust without building via `cargo check`. Every Python tool
+uses managed CPython 3.14. `make audit` derives the Rust workspace root with
 `cargo metadata`, logs workspace member manifests, and runs `cargo audit` once
 from the workspace root. PR CI skips `make audit` and the audit-only setup when
 `github.actor` is `dependabot[bot]`; that keeps whole-lockfile advisories from
@@ -109,7 +114,7 @@ Development builds use Cranelift for debug code generation. On Linux targets,
 quickly. Coverage generation uses `lld` because LLVM coverage tooling expects
 LLVM-compatible linker behaviour.
 
-Install `clang`, `lld`, `python3`, and `cargo-audit`, then run
+Install `clang`, `lld`, `uv`, and `cargo-audit`, then run
 `make install-build-tools`, before running the full generated workflow locally
 on Linux.
 
@@ -132,6 +137,30 @@ because they assign `RUSTFLAGS` (even an empty value displaces the
 configuration). Cargo has no per-profile `rustflags`, so a direct
 `cargo build --release` takes the configuration's flags unless `RUSTFLAGS` is
 assigned too.
+
+**Figure 1: Rust flag and linker selection for build and test commands.**
+
+```mermaid
+flowchart TD
+    Start[Build or test command] --> Assigned{RUSTFLAGS assigned?}
+    Assigned -->|No| Config[Cargo config defaults]
+    Assigned -->|Development path| Compose[Compose inherited flags with DEV_RUST_FLAGS]
+    Assigned -->|Coverage| Coverage[Use coverage-specific flags]
+    Assigned -->|Release| Release[Compose inherited flags with release flags]
+    Config --> Fast[Parallel rustc frontend]
+    Compose --> Fast
+    Fast --> Linux{Linux?}
+    Linux -->|Yes| Mold[Use mold linker]
+    Linux -->|No| Platform[Use platform linker]
+    Coverage --> LLVM[Use LLVM code-generation backend]
+    LLVM --> Lld[Use clang with lld linker]
+    Release --> Stable[Use release profile and platform linker]
+```
+
+The diagram separates the coverage backend from its linker: LLVM generates
+instrumented code, while `lld` links it. Release retains warning denial and
+Polonius, but leaves out the development-only parallel frontend and `mold`
+flags.
 
 On Linux, install `mold` before building: the configuration names it, so a
 build without it fails at link time. CI installs it through `setup-rust`'s

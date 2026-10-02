@@ -44,6 +44,8 @@ compact and omits build output such as `target/`.
 │   ├── build_tools_contract.rs
 │   ├── dependabot_contract.rs
 │   ├── markdown_tooling_contract.rs
+│   ├── workflow_contracts/
+│   │   └── python_gateway_test.py
 │   └── ...
 ├── tools/
 │   └── mold/
@@ -53,6 +55,7 @@ compact and omits build output such as `target/`.
 ├── Cargo.toml
 ├── LICENSE
 ├── Makefile
+├── pyproject.toml
 ├── README.md
 ├── clippy.toml
 ├── codecov.yml
@@ -118,6 +121,8 @@ compact and omits build output such as `target/`.
 - `tests/build_tools_contract.rs`, `tests/dependabot_contract.rs`, and
   `tests/markdown_tooling_contract.rs`: Hold static contracts for the related
   prerequisite, dependency-update, and Markdown policies.
+- `tests/workflow_contracts/`: Holds Python contracts for repository automation
+  and for the Python quality gateway itself.
 - `.github/cv005.toml`: Supplies repository-specific pairing data to the shared
   CodeScene workflow contract.
 - `AGENTS.md`: Provides repository-specific working instructions for agents and
@@ -127,6 +132,8 @@ compact and omits build output such as `target/`.
 - `LICENSE`: Records the project licence text.
 - `Makefile`: Provides the public build, lint, test, coverage, and
   documentation validation commands.
+- `pyproject.toml`: Configures Ruff and Pylint for repository-owned Python; it
+  does not define a distributable Python project.
 - `README.md`: Introduces the project and gives the shortest useful
   getting-started path.
 - `clippy.toml`: Configures Clippy lint behaviour that is not expressed
@@ -141,6 +148,9 @@ compact and omits build output such as `target/`.
   feature grows beyond a small entrypoint or crate root.
 - Keep black-box integration tests and externally observable workflow tests
   under `tests/`.
+- Keep repository-owned Python under `.github`, `tests`, `scripts`, `benches`,
+  or `benchmarks` so every module is formatted, linted, typed, and tested by
+  the public Make targets.
 - Keep reusable documentation under `docs/`. Update `docs/contents.md` whenever
   a documentation file is added, renamed, or removed.
 - Keep build and validation entrypoints in `Makefile`; prefer adding or

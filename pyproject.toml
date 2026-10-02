@@ -1,0 +1,27 @@
+# Mornington is a Rust application. This file configures the Python gateways
+# for repository-owned tests, scripts, benchmarks, and GitHub automation; it
+# deliberately declares neither a Python project nor a build system.
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+extend-exclude = [
+    ".uv-cache",
+    ".uv-tools",
+    "target",
+    "vendor",
+]
+
+[tool.pylint.main]
+py-version = "3.14"
+recursive = true
+max-module-lines = 400
+
+[tool.pylint.design]
+max-args = 4
+max-locals = 20
+max-statements = 70
+max-positional-arguments = 4
+
+[tool.pylint.reports]
+score = false
