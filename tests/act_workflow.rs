@@ -156,10 +156,11 @@ fn act_enabled_tests_execute_the_ci_workflow() {
         "the nested Act run must execute the CI test target without coverage artefact upload"
     );
     assert!(
-        ci_workflow.contains(
-            "- name: Test and Measure Coverage\n        if: env.ACT != 'true'\n        uses: \
-             leynos/shared-actions/.github/actions/generate-coverage@"
-        ),
+        ci_workflow.contains(concat!(
+            "- name: Test and Measure Coverage\n",
+            "        if: github.event_name == 'pull_request' && env.ACT != 'true'\n",
+            "        uses: leynos/shared-actions/.github/actions/generate-coverage@"
+        )),
         "regular CI must retain its coverage measurement workflow"
     );
 }

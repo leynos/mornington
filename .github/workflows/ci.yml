@@ -97,7 +97,7 @@ jobs:
         if: env.ACT == 'true'
         run: make test
       - name: Test and Measure Coverage
-        if: env.ACT != 'true'
+        if: github.event_name == 'pull_request' && env.ACT != 'true'
         uses: leynos/shared-actions/.github/actions/generate-coverage@d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
