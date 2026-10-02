@@ -52,16 +52,18 @@ fn composite_and_lint_routes_recurse_in_order() {
         "the composite route must declare its serial gate boundary"
     );
     let all = "all: ## Perform a comprehensive check of code\n\t+$(MAKE) check-fmt\n\t+$(MAKE) \
-               lint\n\t+$(MAKE) test\n\t+$(MAKE) test-workflow-contracts\n\t+$(MAKE) spelling";
+               lint\n\t+$(MAKE) typecheck\n\t+$(MAKE) test\n\t+$(MAKE) \
+               test-workflow-contracts\n\t+$(MAKE) spelling";
     assert!(
         MAKEFILE.contains(all),
         "make all must recurse through every gate in order rather than parallel prerequisites"
     );
-    let lint = "lint: check-build-tools ## Run rustdoc, Clippy, and Whitaker \
-                sequentially\n\t+$(MAKE) lint-clippy\n\t+$(MAKE) lint-whitaker";
+    let lint = "lint: check-build-tools ## Run Rust and Python lint gateways \
+                sequentially\n\t+$(MAKE) lint-clippy\n\t+$(MAKE) lint-whitaker\n\t+$(MAKE) \
+                lint-python";
     assert!(
         MAKEFILE.contains(lint),
-        "make lint must run its two leaf targets in Clippy-then-Whitaker order"
+        "make lint must run Clippy, Whitaker, and Python lint in that order"
     );
 }
 

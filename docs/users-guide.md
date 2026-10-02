@@ -112,15 +112,18 @@ doctest therefore fails the command.
 The generated `Makefile` exposes these public targets:
 
 - `make all` runs formatting checks, linting, tests, and spelling checks.
-- `make check-fmt` verifies Rust formatting and, with
+- `make check-fmt` verifies Rust and Python formatting and, with
   `mdtablefix --check --git --include-untracked`, Markdown formatting.
-- `make fmt` formats Rust and Markdown sources.
-- `make lint` builds documentation, then runs Clippy and Whitaker, with every
-  warning denied.
-- `make typecheck` type-checks the workspace without building.
-- `make test` runs `cargo nextest run` when cargo-nextest is installed and
-  falls back to `cargo test` otherwise. It denies warnings in normal tests and
-  in the separate all-feature workspace doctest run.
+- `make fmt` formats Rust, Python, and Markdown sources.
+- `make lint` builds documentation, runs Clippy and Whitaker, then runs Ruff,
+  Pylint with the df12 policy, ambrleaks, and Interrogate on repository-owned
+  Python. Every warning is denied.
+- `make typecheck` checks Rust and runs ty over repository-owned Python without
+  building the application.
+- `make test` runs the Python workflow contracts, then runs
+  `cargo nextest run` when cargo-nextest is installed and falls back to
+  `cargo test` otherwise. It denies warnings in normal tests and in the
+  separate all-feature workspace doctest run.
 - `make build` builds the debug target.
 - `make release` builds the release target.
 - `make coverage` writes `lcov.info` using `cargo llvm-cov` and `lld`.
@@ -137,7 +140,8 @@ The generated `Makefile` exposes these public targets:
   as the compensating control.
 - `make test-workflow-contracts` runs the shared CV-005 CodeScene workflow
   contract over the checked-in workflows. Its repository-specific pairing is in
-  `.github/cv005.toml`; the target needs `uv`, which fetches Python 3.13.
+  `.github/cv005.toml`; the target needs `uv`, which fetches the managed Python
+  3.14 baseline.
 - `make markdownlint` checks Markdown files and enforces en-GB-oxendict
   spelling.
 - `make spelling` runs the shared `typos-config-builder` v0.1.3 gate. It
@@ -151,7 +155,7 @@ The generated `Makefile` exposes these public targets:
   `git ls-files` lists nothing, and checks only the files Git tracks.
 - `make nixie` validates Mermaid diagrams.
 
-Install `clang`, `lld`, `python3`, and `cargo-audit`, then run
+Install `clang`, `lld`, `uv`, and `cargo-audit`, then run
 `make install-build-tools`, before running the full generated workflow locally
 on Linux.
 

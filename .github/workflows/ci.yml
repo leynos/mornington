@@ -46,14 +46,14 @@ jobs:
           version: '0.6.0'
       - name: Check build prerequisites
         run: make check-build-tools
+      - name: Setup uv
+        uses: astral-sh/setup-uv@12d13f90bc3a5a1971bebad4beb09a4dfa962e91
       - name: Format
         run: make check-fmt
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@2df9e28eb87988518ef3880c34edad45d65b1668
         with:
           globs: '**/*.md'
-      - name: Setup uv
-        uses: astral-sh/setup-uv@12d13f90bc3a5a1971bebad4beb09a4dfa962e91
       - name: Check the CV-005 contracts
         run: make test-workflow-contracts
       - name: Check spelling
@@ -75,7 +75,7 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
-          python-version: '3.x'
+          python-version: '3.14'
       - name: Install Whitaker
         uses: leynos/shared-actions/.github/actions/install-whitaker@6dea5677a84fec60ca51b07202570e3af12ffdb4
         with:
@@ -85,6 +85,8 @@ jobs:
         run: make audit
       - name: Lint
         run: make lint
+      - name: Typecheck
+        run: make typecheck
       - name: Log coverage linker configuration
         if: env.ACT != 'true'
         run: |

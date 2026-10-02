@@ -7,11 +7,11 @@ MDTABLEFIX ?= mdtablefix
 MDTABLEFIX_SELECT = --git --include-untracked
 MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 
-.PHONY: help all clean test build release coverage lint lint-clippy lint-whitaker fmt check-fmt markdownlint spelling nixie audit rust-audit test-workflow-contracts install-build-tools check-build-tools check-coverage-tools
+.PHONY: help all clean test test-python build release coverage lint lint-clippy lint-whitaker lint-python typecheck typecheck-rust typecheck-python fmt check-fmt markdownlint spelling nixie audit rust-audit test-workflow-contracts install-build-tools check-build-tools check-coverage-tools
 
 # The public composite target recurses one gate at a time, even when callers
 # pass `-j`, so shared build caches never receive overlapping gate work.
-.NOTPARALLEL: all
+.NOTPARALLEL: all lint typecheck test test-workflow-contracts
 
 SHELL := bash
 
@@ -57,15 +57,54 @@ INSTALL_BUILD_TOOLS ?= scripts/install-build-tools.sh
 CHECK_BUILD_TOOLS ?= scripts/check-build-tools.sh
 UV ?= uv
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
+
+# All repository-owned Python uses the same managed CPython baseline. Keep
+# this value aligned with Ruff and Pylint in pyproject.toml; the workflow
+# contract rejects drift between the three sources.
+PYTHON_BASELINE ?= 3.14
+PYTHON = $(UV_ENV) $(UV) run --no-project --managed-python \
+	--python $(PYTHON_BASELINE) python
+RUFF_VERSION ?= 0.16.4
+RUFF = $(UV_ENV) $(UV) tool run --managed-python \
+	--python $(PYTHON_BASELINE) --from ruff==$(RUFF_VERSION) ruff
+PYLINT_VERSION ?= 4.0.9
+DF12_PYTHON_LINTS_REF ?= 4cf41736cce2f7ba2778882a5c629c044568a0e5
+DF12_PYTHON_LINTS = git+https://github.com/leynos/df12-python-lints.git@$(DF12_PYTHON_LINTS_REF)
+DF12_PYLINT_MESSAGES = R9101,C9102,R9103,R9104,C9105,C9106,C9107,R9108,R9109,R9110,R9111,R9112,C9112
+# Pylint's defaults remain enabled while the same process loads the full
+# pinned df12 policy. No `--disable` tier can hide a finding from either set.
+PYLINT = $(UV_ENV) $(UV) tool run --managed-python \
+	--python $(PYTHON_BASELINE) --from 'pylint==$(PYLINT_VERSION)' \
+	--with '$(DF12_PYTHON_LINTS)' pylint \
+	--load-plugins=df12_python_lints --enable=$(DF12_PYLINT_MESSAGES)
+AMBRLEAKS = $(UV_ENV) $(UV) tool run --managed-python \
+	--python $(PYTHON_BASELINE) --from '$(DF12_PYTHON_LINTS)' ambrleaks
+INTERROGATE_VERSION ?= 1.7.0
+INTERROGATE = $(UV_ENV) $(UV) tool run --managed-python \
+	--python $(PYTHON_BASELINE) --from 'interrogate==$(INTERROGATE_VERSION)' \
+	interrogate --fail-under 100
+TY_VERSION ?= 0.0.74
+PYTHON_SOURCE_ROOTS ?= .github tests scripts benches benchmarks
+PYTHON_EXISTING_SOURCE_ROOTS = $(wildcard $(PYTHON_SOURCE_ROOTS))
+PYTHON_PRUNED_DIRECTORIES = \
+	-name .git -prune -o -name .venv -prune -o -name venv -prune -o \
+	-name .uv-cache -prune -o -name .uv-tools -prune -o \
+	-name target -prune -o -name vendor -prune -o -name node_modules -prune -o \
+	-name __pycache__ -prune -o -name .pytest_cache -prune -o \
+	-name .mypy_cache -prune -o -name .ruff_cache -prune -o
+PYTHON_SOURCES = $(strip $(shell find $(PYTHON_EXISTING_SOURCE_ROOTS) \
+	$(PYTHON_PRUNED_DIRECTORIES) -type f -name '*.py' -print | sort))
+PYTHON_IMPORT_ROOTS = $(addprefix --extra-search-path ,$(PYTHON_EXISTING_SOURCE_ROOTS))
 # The CV-005 CodeScene contracts live in shared-actions and run from a full
 # commit, so a fix is a pin bump. `.github/cv005.toml` holds this repository's
 # only parameters.
 CV005_CONTRACTS_REF ?= a38feb9be25755c30eca5bda96bd3786a5b89c6b
-CV005_CONTRACTS = $(UV_ENV) $(UV) tool run --python 3.13 \
+CV005_CONTRACTS = $(UV_ENV) $(UV) tool run --managed-python \
+	--python $(PYTHON_BASELINE) \
 	--from 'git+https://github.com/leynos/shared-actions@$(CV005_CONTRACTS_REF)\#subdirectory=packages/cv005-contracts' \
 	cv005-contracts
 
-test-workflow-contracts: ## Check the CV-005 CodeScene workflow contracts
+test-workflow-contracts: test-python ## Check local and shared workflow contracts
 	$(CV005_CONTRACTS) check --repository .
 
 build: check-build-tools target/debug/$(TARGET) ## Build debug binary
@@ -74,6 +113,7 @@ release: target/release/$(TARGET) ## Build release binary
 all: ## Perform a comprehensive check of code
 	+$(MAKE) check-fmt
 	+$(MAKE) lint
+	+$(MAKE) typecheck
 	+$(MAKE) test
 	+$(MAKE) test-workflow-contracts
 	+$(MAKE) spelling
@@ -82,12 +122,15 @@ clean: ## Remove build artefacts
 	$(CARGO) clean
 	rm -f .typos-oxendict-base.json .typos-oxendict-base.toml
 
-test: check-build-tools ## Run tests with warnings treated as errors
+test: check-build-tools test-python ## Run tests with warnings treated as errors
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) $(TEST_CMD) $(TEST_FLAGS) $(BUILD_JOBS)
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) test --doc --workspace --all-features
 ifeq ($(WITH_ACT),1)
 	act pull_request --workflows .github/workflows/ci.yml --job build-test --platform ubuntu-latest=catthehacker/ubuntu:act-latest --secret GITHUB_TOKEN --env ACT=true
 endif
+
+test-python: ## Run repository-owned Python tests on the baseline interpreter
+	$(PYTHON) -m unittest discover -s tests/workflow_contracts -p '*_test.py'
 
 target/debug/$(TARGET): check-build-tools ## Build the debug binary
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) build $(BUILD_JOBS) --bin $(TARGET)
@@ -114,9 +157,10 @@ check-build-tools: ## Verify development build prerequisites
 check-coverage-tools: ## Verify LLVM coverage prerequisites
 	$(CHECK_BUILD_TOOLS) --coverage
 
-lint: check-build-tools ## Run rustdoc, Clippy, and Whitaker sequentially
+lint: check-build-tools ## Run Rust and Python lint gateways sequentially
 	+$(MAKE) lint-clippy
 	+$(MAKE) lint-whitaker
+	+$(MAKE) lint-python
 
 lint-clippy: ## Run rustdoc and Clippy with warnings denied
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) doc --no-deps
@@ -126,16 +170,41 @@ lint-whitaker: ## Run Whitaker with development Rust flags
 	@echo "Whitaker binary: $(WHITAKER)"
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(WHITAKER) --all -- $(CARGO_FLAGS)
 
-typecheck: check-build-tools ## Type-check without building
+lint-python: ## Run Ruff, Pylint, df12, authority, and documentation checks
+	@if [ -z "$(PYTHON_SOURCES)" ]; then \
+		echo "lint-python: no Python sources under $(PYTHON_SOURCE_ROOTS)"; \
+	else \
+		set -e; \
+		$(RUFF) check $(PYTHON_SOURCES); \
+		$(PYLINT) $(PYTHON_SOURCES); \
+		$(AMBRLEAKS) $(PYTHON_SOURCES); \
+		$(INTERROGATE) $(PYTHON_SOURCES); \
+	fi
+
+typecheck: check-build-tools typecheck-rust typecheck-python ## Type-check Rust and Python without building
+
+typecheck-rust: check-build-tools ## Type-check Rust without building
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) check $(CARGO_FLAGS)
+
+typecheck-python: ## Type-check Python sources on the baseline interpreter
+	@if [ -z "$(PYTHON_SOURCES)" ]; then \
+		echo "typecheck-python: no Python sources under $(PYTHON_SOURCE_ROOTS)"; \
+	else \
+		$(UV_ENV) $(UV) tool run --managed-python \
+			--python $(PYTHON_BASELINE) --from ty==$(TY_VERSION) \
+			ty check --python-version $(PYTHON_BASELINE) \
+			$(PYTHON_IMPORT_ROOTS) $(PYTHON_SOURCES); \
+	fi
 
 fmt: ## Format Rust and Markdown sources
 	$(CARGO) fmt --all
+	@if [ -n "$(PYTHON_SOURCES)" ]; then $(RUFF) format $(PYTHON_SOURCES); fi
 	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 	$(MDLINT) --fix "**/*.md"
 
 check-fmt: ## Verify formatting
 	$(CARGO) fmt --all -- --check
+	@if [ -n "$(PYTHON_SOURCES)" ]; then $(RUFF) format --check $(PYTHON_SOURCES); fi
 	$(MDTABLEFIX) --check $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 
 markdownlint: ## Lint Markdown files
@@ -163,7 +232,7 @@ rust-audit: ## Audit the Rust workspace for known vulnerabilities
 	manifest_list=$$(mktemp); \
 	trap 'rm -f "$$manifest_list"' EXIT; \
 	printf "Audit metadata phase: deriving workspace manifests\n"; \
-	$(CARGO) metadata --no-deps --format-version 1 | python3 -c 'import json, sys; metadata = json.load(sys.stdin); members = set(metadata["workspace_members"]); print(metadata["workspace_root"]); [print(package["manifest_path"]) for package in metadata["packages"] if package["id"] in members]' > "$$manifest_list"; \
+	$(CARGO) metadata --no-deps --format-version 1 | $(PYTHON) -c 'import json, sys; metadata = json.load(sys.stdin); members = set(metadata["workspace_members"]); print(metadata["workspace_root"]); [print(package["manifest_path"]) for package in metadata["packages"] if package["id"] in members]' > "$$manifest_list"; \
 	workspace_root=$$(sed -n '1p' "$$manifest_list"); \
 	audit_flags=(); \
 	for advisory in $$CARGO_AUDIT_IGNORES; do \

@@ -32,9 +32,11 @@ jobs:
         env:
           RUSTFLAGS: ""
         run: cargo binstall --no-confirm cargo-audit
+      - name: Setup uv
+        uses: astral-sh/setup-uv@12d13f90bc3a5a1971bebad4beb09a4dfa962e91
       - name: Setup Python for audit manifest extraction
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
-          python-version: '3.x'
+          python-version: '3.14'
       - name: Audit dependencies
         run: make audit
