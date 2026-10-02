@@ -41,9 +41,9 @@ jobs:
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
         uses: >-
-          leynos/shared-actions/.github/actions/install-mdtablefix@4fb8eb7ad52454678a0662865d81d3cd17aa6e0e
+          leynos/shared-actions/.github/actions/install-mdtablefix@0606ca899ce2995a0c4bc78e660e80832e6e8855
         with:
-          version: '0.6.0'
+          version: '0.6.1'
       - name: Check build prerequisites
         run: make check-build-tools
       - name: Format
@@ -60,6 +60,7 @@ jobs:
         run: make spelling
       - name: Install test runner
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           RUSTFLAGS: ""
         run: cargo binstall --no-confirm --locked cargo-nextest
       # Dependency audits report advisories against the whole lockfile, so a
@@ -69,6 +70,7 @@ jobs:
       - name: Install cargo-audit
         if: github.actor != 'dependabot[bot]'
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           RUSTFLAGS: ""
         run: cargo binstall --no-confirm cargo-audit
       - name: Setup Python for audit manifest extraction

@@ -163,6 +163,12 @@ failing tests here as an exception and remove the backend from
 Markdown uses en-GB-oxendict spelling enforced by the shared
 `typos-config-builder` gate. Run `make spelling`.
 
+`TYPOS_CONFIG_BUILDER_VERSION` in the `Makefile` pins the
+`typos-config-builder` release the gate runs (currently `v0.1.3`). Raise it
+together with the regenerated `typos.toml`, never on its own. The builder
+requires Python 3.14 or newer, so the target passes `--python 3.14` and `uv`
+fetches that interpreter when the host lacks one.
+
 `typos.toml` is generated, tracked output. The gate regenerates it on every run
 from the live shared estate dictionary and the `typos.local.toml` overlay, so a
 word added to the shared dictionary needs no change here. Commit regenerated
@@ -260,13 +266,13 @@ Markdown follows Concordat `8a4a1faba1290687c0b6b221e1fc96439ba3ba43`'s
   MD010 excludes code blocks, while MD013 enforces 80-column prose and
   120-column code blocks without wrapping headings or tables. These distinct
   settings are not interchangeable.
-- CI installs mdtablefix 0.6.0 with the shared `install-mdtablefix` action
+- CI installs mdtablefix 0.6.1 with the shared `install-mdtablefix` action
   before `make check-fmt`, and lints Markdown with
   `DavidAnson/markdownlint-cli2-action` over `**/*.md`.
 
 Install mdtablefix 0.6.0 or later locally with
-`cargo binstall --no-confirm mdtablefix@0.6.0`, or
-`cargo install --locked mdtablefix@0.6.0`. Install markdownlint-cli2 0.23.3 with
+`cargo binstall --no-confirm mdtablefix@0.6.1`, or
+`cargo install --locked mdtablefix@0.6.1`. Install markdownlint-cli2 0.23.3 with
 `bun add --global markdownlint-cli2@0.23.3` or
 `npm install --global markdownlint-cli2@0.23.3`.
 
