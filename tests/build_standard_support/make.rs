@@ -5,7 +5,6 @@
 use std::process::Command;
 
 use super::config::{Flags, LINKER_FLAG, Pin, Problems, THREADS_FLAG};
-
 /// Makefile targets that build for development. A command in one either assigns
 /// `RUSTFLAGS` with the standard flags or assigns none and so takes the
 /// configuration's. The list is this repository's own, and a target that stops
@@ -21,7 +20,6 @@ pub enum Host {
     Linux,
     Darwin,
 }
-
 impl Host {
     /// Returns the value `uname -s` reports for the host.
     const fn make_value(self) -> &'static str {
@@ -34,7 +32,6 @@ impl Host {
     /// Returns whether the host takes mold, which ships for Linux alone.
     const fn takes_linker_flag(self) -> bool { matches!(self, Self::Linux) }
 }
-
 /// What one `make -n` command assigns to `RUSTFLAGS`.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Assignment {
@@ -92,7 +89,7 @@ pub fn assigned_rustflags(line: &str) -> Result<Assignment, String> {
     ))
 }
 
-/// Reads the assignment of each cargo or whitaker command `make -n` printed.
+/// Reads the assignment of each Cargo command `make -n` printed.
 ///
 /// # Errors
 ///
@@ -103,13 +100,21 @@ pub fn commands_from(stdout: &str) -> Result<Vec<Assignment>, String> {
     joined
         .lines()
         .filter(|line| !line.trim_start().starts_with("echo"))
-        .filter(|line| line.contains("cargo") || line.contains("whitaker"))
+        .filter(|line| {
+            line.split_whitespace().any(|word| {
+                matches!(word, "cargo" | "probe-cargo")
+                    || word.ends_with("/cargo")
+                    || word.ends_with("/probe-cargo")
+            })
+        })
         .map(assigned_rustflags)
         .collect()
 }
 
-/// Runs `make -n` for a target on a host and reads its commands.
-fn make_commands(target: &str, host: Host) -> Result<Vec<Assignment>, String> {
+/// Returns the dry-run output for one Make target and host.
+/// # Errors
+/// Returns the reason when Make fails or the target is not defined.
+pub fn make_output(target: &str, host: Host) -> Result<String, String> {
     let output = Command::new("make")
         .args([
             "-n",
@@ -126,7 +131,46 @@ fn make_commands(target: &str, host: Host) -> Result<Vec<Assignment>, String> {
             "`make -n {target}` failed, so it is not defined: {stderr}"
         ));
     }
-    commands_from(&String::from_utf8_lossy(&output.stdout))
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// Runs `make -n` for a target on a host and reads its Cargo commands.
+/// # Errors
+/// Returns an error when Make fails or a Cargo assignment is unreadable.
+pub fn make_commands(target: &str, host: Host) -> Result<Vec<Assignment>, String> {
+    commands_from(&make_output(target, host)?)
+}
+
+/// Reports coverage commands that do not select LLVM code generation.
+///
+/// The linker remains a separate setting: this contract checks only the Cargo
+/// profile backend, while `held_out_problems` keeps the `RUSTFLAGS` exclusions.
+pub fn coverage_backend_problems(output: &str) -> Problems {
+    let joined = output.replace("\\\n", " ");
+    let commands: Vec<_> = joined
+        .lines()
+        .filter(|line| {
+            let has_coverage_subcommand = line.split_whitespace().any(|word| word == "llvm-cov");
+            let has_cargo_executable = line
+                .split_whitespace()
+                .any(|word| word == "cargo" || word.ends_with("/cargo"));
+            has_coverage_subcommand && has_cargo_executable
+        })
+        .collect();
+    if commands.is_empty() {
+        return vec!["coverage dry-run produced no cargo llvm-cov command".to_owned()];
+    }
+    commands
+        .into_iter()
+        .filter(|line| {
+            let assignments: Vec<_> = line
+                .split_whitespace()
+                .filter_map(|word| word.strip_prefix("CARGO_PROFILE_DEV_CODEGEN_BACKEND="))
+                .collect();
+            assignments.as_slice() != ["llvm"]
+        })
+        .map(|_| "coverage must set CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm".to_owned())
+        .collect()
 }
 
 /// Returns the complaint about one development command, if any: an assigned
@@ -162,10 +206,17 @@ pub fn development_problems(host: Host, pin: Pin) -> Result<(Problems, usize), S
     let mut read = 0;
     for target in DEVELOPMENT_TARGETS {
         let commands = make_commands(target, host)?;
-        read += commands
+        let target_read = commands
             .iter()
             .filter(|command| **command != Assignment::Unassigned)
             .count();
+        read += target_read;
+        if target_read == 0 {
+            problems.push(format!(
+                "`make {target}` on {} produced no readable development Cargo commands",
+                host.make_value()
+            ));
+        }
         problems.extend(
             commands
                 .iter()
@@ -206,6 +257,11 @@ pub fn held_out_problems() -> Result<(Problems, usize), String> {
     let mut read = 0;
     for target in HELD_OUT_TARGETS {
         let commands = make_commands(target, Host::Linux)?;
+        if commands.is_empty() {
+            problems.push(format!(
+                "`make {target}` produced no held-out Cargo commands"
+            ));
+        }
         read += commands.len();
         problems.extend(
             commands

@@ -29,16 +29,37 @@ Application projects render `src/main.rs`, `src/lib.rs`, release automation, and
 `[package.metadata.binstall]` metadata for binary installation.
 
 This project enables the Polonius alpha borrow checker (`-Zpolonius=next`) on
-its dated nightly toolchain. The checked-in Cargo configuration supplies the
-flag to normal builds and editor tooling, while the Makefile and workflows
-re-state it wherever they override `RUSTFLAGS`. See the
-[Polonius policy](polonius.md) before changing the toolchain or borrow-centric
-APIs.
+its dated nightly toolchain. See the [Polonius policy](polonius.md) before
+changing the toolchain or borrow-centric APIs.
 
-Development builds use Cranelift for debug code generation. On Linux targets,
-`.cargo/config.toml` configures clang to link with `mold` so local debug builds
-link quickly. Coverage generation uses `lld` instead because LLVM coverage
-tools expect LLVM-compatible linker behaviour.
+## Rust Build Standard
+
+Development builds use nightly `-Zthreads=8` for the parallel rustc frontend
+and Cranelift for debug code generation. On Linux, the checked-in Cargo
+configuration adds `-C link-arg=-fuse-ld=mold`; other platforms omit this
+linker selection. Before building on a fresh Linux checkout, run
+`make install-build-tools` to install the pinned toolchain and
+checksum-verified mold binary, then run `make check-build-tools` to verify the
+toolchain, components, clang, and mold.
+
+Cargo selects one `rustflags` source rather than merging the configured sources
+with environment flags. Setting `RUSTFLAGS` replaces the values from
+`.cargo/config.toml`. The Makefile's development Cargo build, test, typecheck,
+Clippy, and Rustdoc commands preserve the caller's `RUSTFLAGS` and append the
+required warning denial, Polonius, nightly frontend, and Linux linker flags.
+The Whitaker lint invocation also preserves caller flags and appends the
+project development flags to its own Cargo work. Use the Make targets when
+invoking development builds so caller-specific flags do not discard the project
+defaults.
+
+Coverage and release are deliberate exceptions to the development flags.
+Coverage sets `CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm` to choose the dev
+code-generation backend for instrumentation. Separately, it selects `clang`
+with the `lld` linker (`-fuse-ld=lld`) for LLVM coverage compatibility; `lld`
+is a linker, not a code-generation backend. Coverage omits `-Zthreads=8` and
+the development linker selection, and `make check-coverage-tools` also verifies
+`ld.lld` is available. Release preserves caller flags, warning denial, and
+Polonius while omitting the development-only frontend and linker flags.
 
 ## Validation and Environment Policy
 
@@ -46,9 +67,10 @@ This project denies `unknown_lints`, `renamed_and_removed_lints`,
 `unsafe_code`, and `missing_docs`. Rustdoc denies `missing_crate_level_docs`,
 `broken_intra_doc_links`, `private_intra_doc_links`, `bare_urls`,
 `invalid_html_tags`, `invalid_codeblock_attributes`, and `unescaped_backticks`.
-Clippy denies `missing_assert_message` and uses `disallowed_methods` to reject
-direct calls to process-environment readers, iterators, and mutation functions.
-Warnings are validation failures; these policies are not advisory.
+Clippy denies `missing_assert_message` and `missing_docs_in_private_items`, and
+uses `disallowed_methods` to reject direct calls to process-environment
+readers, iterators, and mutation functions. Warnings are validation failures;
+these policies are not advisory.
 
 Code that depends on environment variables must receive `mockable::Env` (or a
 narrow equivalent closure) as a dependency. The production composition root
@@ -89,8 +111,7 @@ doctest therefore fails the command.
 
 The generated `Makefile` exposes these public targets:
 
-- `make all` runs formatting checks, linting, tests, and spelling checks, plus
-  the workflow contract check.
+- `make all` runs formatting checks, linting, tests, and spelling checks.
 - `make check-fmt` verifies Rust formatting and, with
   `mdtablefix --check --git --include-untracked`, Markdown formatting.
 - `make fmt` formats Rust and Markdown sources.
@@ -103,6 +124,10 @@ The generated `Makefile` exposes these public targets:
 - `make build` builds the debug target.
 - `make release` builds the release target.
 - `make coverage` writes `lcov.info` using `cargo llvm-cov` and `lld`.
+- `make install-build-tools` installs the pinned Rust toolchain and
+  checksum-verified mold binary, then checks them.
+- `make check-build-tools` verifies the normal development prerequisites;
+  `make check-coverage-tools` also requires `ld.lld`.
 - `make audit` derives the Rust workspace root with `cargo metadata` and runs
   `cargo audit` once from that root. In PR CI, Dependabot runs skip
   `make audit` and the audit-only setup when `github.actor` is
@@ -110,24 +135,25 @@ The generated `Makefile` exposes these public targets:
   dependency updates. Human PRs still retain the audit gate, and
   `.github/workflows/audit.yml` runs weekly and can also be triggered manually
   as the compensating control.
-- `make test-workflow-contracts` runs the shared CV-005 CodeScene contract
-  (`cv005-contracts check`, pinned in the Makefile) over the repository's
-  workflows. It needs `uv`, which fetches Python 3.13 itself.
+- `make test-workflow-contracts` runs the shared CV-005 CodeScene workflow
+  contract over the checked-in workflows. Its repository-specific pairing is in
+  `.github/cv005.toml`; the target needs `uv`, which fetches Python 3.13.
 - `make markdownlint` checks Markdown files and enforces en-GB-oxendict
   spelling.
-- `make spelling` runs the shared `typos-config-builder` gate. It regenerates
-  `typos.toml` from the live shared dictionary and the `typos.local.toml`
-  overlay, then checks Markdown prose, so `typos.toml` is never drift checked
-  in CI. The generated file is ignored; keep repository-specific exceptions in
+- `make spelling` runs the shared `typos-config-builder` v0.1.3 gate. It
+  regenerates `typos.toml` from the live shared dictionary and the
+  `typos.local.toml` overlay, then checks Markdown prose, so `typos.toml` is
+  never drift checked in CI. Commit its regenerated output with spelling-policy
+  changes, but never edit it by hand. Keep repository-specific exceptions in
   the tracked `typos.local.toml` overlay. The gate enumerates its inputs with
   `git ls-files`, so the project must be a Git repository in which Git already
   tracks some files; `make spelling` fails with that instruction when
-  `git ls-files` lists nothing, and checks only the files Git tracks. The first
-  run writes the ignored `typos.toml` in the working tree.
+  `git ls-files` lists nothing, and checks only the files Git tracks.
 - `make nixie` validates Mermaid diagrams.
 
-Install `clang`, `lld`, `mold`, `python3`, `uv`, and `cargo-audit` before
-running the full generated workflow locally on Linux.
+Install `clang`, `lld`, `python3`, and `cargo-audit`, then run
+`make install-build-tools`, before running the full generated workflow locally
+on Linux.
 
 ## Scheduled Mutation Testing
 

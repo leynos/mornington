@@ -83,19 +83,19 @@ jobs:
         # Select the generated project's supported compiler explicitly and
         # omit repository-local linker and Cranelift configuration.
         run: cross +nightly-2026-08-27 build --release --target ${{ matrix.target }}
-      - name: Prepare artifact
+      - name: Prepare artefact
         run: |
-          mkdir -p artifacts/${{ matrix.os }}-${{ matrix.arch }}
+          mkdir -p artefacts/${{ matrix.os }}-${{ matrix.arch }}
           cp target/${{ matrix.target }}/release/${{ env.BIN_NAME }}${{ matrix.ext }} \
-            artifacts/${{ matrix.os }}-${{ matrix.arch }}/${{ env.BIN_NAME }}-${{ matrix.target }}${{ matrix.ext }}
-          cd artifacts/${{ matrix.os }}-${{ matrix.arch }}
+            artefacts/${{ matrix.os }}-${{ matrix.arch }}/${{ env.BIN_NAME }}-${{ matrix.target }}${{ matrix.ext }}
+          cd artefacts/${{ matrix.os }}-${{ matrix.arch }}
           sha256sum ${{ env.BIN_NAME }}-${{ matrix.target }}${{ matrix.ext }} > \
             ${{ env.BIN_NAME }}-${{ matrix.target }}${{ matrix.ext }}.sha256
-      - name: Upload release artifact
+      - name: Upload release artefact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ env.BIN_NAME }}-${{ matrix.os }}-${{ matrix.arch }}
-          path: artifacts/${{ matrix.os }}-${{ matrix.arch }}
+          path: artefacts/${{ matrix.os }}-${{ matrix.arch }}
 
   release:
     needs: build
@@ -106,12 +106,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
         with:
-          path: artifacts
+          path: artefacts
       - uses: softprops/action-gh-release@403a5240f3837fa857f642062e05aad6bb3391ca
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           generate_release_notes: true
           files: |
-            artifacts/*/*
+            artefacts/*/*
 

@@ -16,69 +16,11 @@ pub const LINKER_FLAG: &str = "-Clink-arg=-fuse-ld=mold";
 /// A list of complaints about the repository.
 pub type Problems = Vec<String>;
 
-/// The channel the toolchain file pins.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Pin {
-    Nightly,
-    Stable,
-}
+#[path = "config/pin.rs"]
+pub(crate) mod pin;
+pub use pin::Pin;
 
-impl Pin {
-    /// Reads the pin from a `rust-toolchain.toml`.
-    ///
-    /// The channel must be named exactly once and be one the standard knows: a
-    /// `nightly` (dated or not), `stable`, `beta`, or a numbered release.
-    /// Anything else, and a missing or repeated `channel`, is an error rather
-    /// than a guess that lets a malformed file pass as stable.
-    ///
-    /// ```text
-    /// Pin::read("channel = \"nightly-2026-05-28\"") == Ok(Pin::Nightly)
-    /// Pin::read("channel = \"1.94.0\"")             == Ok(Pin::Stable)
-    /// Pin::read("[toolchain]")                       == Err(..)
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Returns the reason when the channel is missing, repeated or unsupported.
-    pub fn read(toolchain: &str) -> Result<Self, String> {
-        let channels: Vec<&str> = toolchain
-            .lines()
-            .map(str::trim)
-            .filter(|line| line.starts_with("channel"))
-            .filter_map(|line| line.split('"').nth(1))
-            .collect();
-        match channels.as_slice() {
-            [] => Err("rust-toolchain.toml names no channel".to_owned()),
-            [channel] => Self::classify(channel),
-            _ => Err(format!(
-                "rust-toolchain.toml names more than one channel: {channels:?}"
-            )),
-        }
-    }
-
-    /// Classifies one channel name.
-    fn classify(channel: &str) -> Result<Self, String> {
-        let is_nightly = channel == "nightly" || channel.starts_with("nightly-");
-        let is_release = channel.split('.').count() >= 2
-            && channel
-                .split('.')
-                .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()));
-        if is_nightly {
-            Ok(Self::Nightly)
-        } else if is_release || matches!(channel, "stable" | "beta") {
-            Ok(Self::Stable)
-        } else {
-            Err(format!(
-                "the channel `{channel}` is not one the standard knows"
-            ))
-        }
-    }
-
-    /// Returns whether the pin takes `-Zthreads`, which is a nightly flag.
-    pub const fn takes_threads(self) -> bool { matches!(self, Self::Nightly) }
-}
-
-/// A list of compiler flags, with `-C value` pairs joined into `-Cvalue` so
+/// A list of compiler flags, with `-C value` and `-D value` pairs joined so
 /// both spellings compare equal.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Flags(Vec<String>);
@@ -88,12 +30,14 @@ impl Flags {
     ///
     /// ```text
     /// Flags::from_words(["-C", "link-arg=-fuse-ld=mold"]) == Flags::from_words(["-Clink-arg=-fuse-ld=mold"])
+    /// Flags::from_words(["-D", "warnings"]) == Flags::from_words(["-Dwarnings"])
     /// ```
     pub fn from_words<'a>(words: impl IntoIterator<Item = &'a str>) -> Self {
         let mut joined: Vec<String> = Vec::new();
         for word in words {
             match joined.last_mut() {
                 Some(last) if last == "-C" => *last = format!("-C{word}"),
+                Some(last) if last == "-D" => *last = format!("-D{word}"),
                 _ => joined.push(word.to_owned()),
             }
         }
@@ -101,7 +45,7 @@ impl Flags {
     }
 
     /// Returns whether the list names one flag.
-    fn names(&self, flag: &str) -> bool { self.0.iter().any(|candidate| candidate == flag) }
+    pub fn names(&self, flag: &str) -> bool { self.0.iter().any(|candidate| candidate == flag) }
 
     /// Returns whether the list names the frontend flag.
     pub fn names_threads(&self) -> bool { self.names(THREADS_FLAG) }
@@ -136,6 +80,9 @@ impl Flags {
     }
 }
 
+/// Cargo table name for settings that apply to every Linux target.
+const LINUX_CFG_TABLE: &str = "target.'cfg(target_os = \"linux\")'";
+
 /// One `rustflags` source in a Cargo configuration.
 struct Source {
     table: String,
@@ -143,11 +90,11 @@ struct Source {
 }
 
 impl Source {
-    /// Returns whether the table applies on Linux alone.
-    fn is_linux(&self) -> bool { self.table.starts_with("target.") && self.table.contains("linux") }
+    /// Returns whether the table applies to every Linux target.
+    fn is_linux(&self) -> bool { self.table == LINUX_CFG_TABLE }
 
     /// Returns what is wrong with the source's flags for a pin: the frontend
-    /// flag on a nightly pin only, and mold in a Linux table only.
+    /// flag on a nightly pin only, and mold in a Linux-wide cfg table only.
     fn problem(&self, pin: Pin) -> Option<String> {
         let reason = self.flags.meets(pin, self.is_linux()).err()?;
         Some(format!("[{}] {reason}", self.table))
@@ -266,7 +213,7 @@ fn drift_problem(found: &[Source]) -> Option<String> {
 /// Returns every complaint about the configuration sources.
 ///
 /// ```text
-/// config_problems(CONFIG, Pin::read(TOOLCHAIN)) == Ok(vec![])   // a compliant repository
+/// config_problems(CONFIG, Pin::Nightly) == Ok(vec![])   // a compliant repository
 /// ```
 ///
 /// # Errors

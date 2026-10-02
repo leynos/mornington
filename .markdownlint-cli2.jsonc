@@ -12,14 +12,15 @@
   },
   "ignores": [
     "**/.venv/**",
+    ".vtcode/**",
     ".node_modules/**",
     "**/node_modules/**",
     "**/target/**",
-    ".vtcode/**",
     ".terraform/**",
+    "**/.terraform/**",
     ".uv-cache/**",
+    ".uv-tools/**",
     "memories/**",
-    "CRUSH.md",
-    "**/dist/**"
+    "CRUSH.md"
   ]
 }

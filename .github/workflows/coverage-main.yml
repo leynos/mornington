@@ -8,31 +8,32 @@ name: Coverage (main)
 # are readable by every pull-request run, so the baseline written here is the
 # one a pull request's ratchet compares against.
 #
-# workflow_dispatch is mandatory, not a convenience: merges performed by
-# the automerge workflow's GITHUB_TOKEN do not fire push-event workflows,
-# so automerged changes to main only receive coverage when this workflow
-# is dispatched from main. The token is an environment secret of the
-# main-only `codescene` environment, which the job declares.
+# `workflow_dispatch` existed before this coverage boundary and remains
+# available for an operator to rerun main coverage. No local automerge
+# workflow or token-based merge history supports treating it as an automerge
+# workaround. The publisher declares the main-protected `codescene` environment.
+# Administrators must separately verify token scope and repository exposure:
+# secret listing was unavailable to this workflow author.
 
 'on':
   push:
     branches: [main]
   workflow_dispatch:
 
-# Publishers queue rather than race or cancel. Runs in the group never
-# overlap, and a newer trigger replaces an older pending run; nothing here
-# promises that runs start in commit order. The coverage action saves the
+# Publishers queue rather than race or cancel. Runs in the workflow/ref group
+# never overlap, and a newer trigger replaces an older pending run; nothing
+# here promises that runs start in commit order. The coverage action saves the
 # ratchet baseline only on a push, so a dispatch uploads coverage but leaves
 # the baseline where the last completed push left it.
 concurrency:
-  group: coverage-main-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   coverage-upload:
     runs-on: ubuntu-latest
-    # CS_ACCESS_TOKEN is a secret of this environment, which admits main
-    # alone, so no other ref can reach the token.
+    # The protected environment API confirms that only main may target this
+    # environment. It does not reveal secret scope or repository exposure.
     environment: codescene
     permissions:
       contents: read
@@ -53,14 +54,14 @@ jobs:
         run: |-
           rustc --version
           printf 'Base RUSTFLAGS: %s\n' "$RUSTFLAGS"
-      - name: Install mold linker
+      - name: Install coverage linker prerequisites
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          # mold accelerates dev builds; coverage uses lld for llvm-tools compatibility.
+          # setup-rust installs pinned mold; coverage needs clang and lld.
           sudo apt-get update \
-            && sudo apt-get install --yes --no-install-recommends clang lld mold
+            && sudo apt-get install --yes --no-install-recommends clang lld
       - name: Install test runner
         env:
           RUSTFLAGS: ""
@@ -72,35 +73,42 @@ jobs:
           echo "Coverage CFLAGS: -fuse-ld=lld"
           echo "Coverage LDFLAGS: -fuse-ld=lld"
       - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+          CARGO_PROFILE_DEV_CODEGEN_BACKEND: llvm
           RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld
           CFLAGS: -fuse-ld=lld
           LDFLAGS: -fuse-ld=lld
         with:
+          language: rust
+          cargo-manifest: Cargo.toml
+          all-targets: 'true'
+          all-features: 'true'
+          doctests: 'true'
           output-path: lcov.info
           format: lcov
           with-ratchet: 'true'
+          publish-artefact: 'true'
+          publish-baseline: auto
       # Publishes whether the token exists, and nothing else. The token is in
       # no `env` on this workflow: the upload is a composite action whose
       # nested steps inherit the calling step's `env`. GitHub evaluates the
       # expression before it sends the command to the runner, so this shell
       # receives only `true` or `false`; the upload alone receives the token,
       # as its input.
-      - name: Check CodeScene token availability
-        id: codescene_token
+      - name: Check CodeScene token
+        id: codescene-token
         run: echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
       # The ref guard is not redundant with the push branch filter: a
       # dispatch runs from whichever branch started it, and the upload action
       # does not check the ref itself.
       - name: Upload coverage data to CodeScene
-        if: steps.codescene_token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        if: steps.codescene-token.outputs.available == 'true' && github.ref == 'refs/heads/main'
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79
         # No checksum input: the uploader pins cs-coverage through its own
         # manifest and rejects a non-empty `installer-checksum`.
         with:
           format: lcov
           mode: upload
           access-token: ${{ secrets.CS_ACCESS_TOKEN }}
-

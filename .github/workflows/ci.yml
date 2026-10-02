@@ -14,18 +14,16 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
       BUILD_PROFILE: debug
-      WHITAKER_INSTALLER_VERSION: '0.2.6'
     steps:
       - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@8a83824b29dfe8f861714b544dc85fb925ed010c
         with:
           install-mold: 'true'
-          expect-cache: any
           rustflags: -Zpolonius=next
-          use-sccache: ${{ env.ACT != 'true' }}
+          use-sccache: "${{ env.ACT != 'true' }}"
       - name: Log Rust compiler configuration
         run: |-
           rustc --version
@@ -35,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          # setup-rust installs mold (install-mold above); coverage uses lld for llvm-tools
+          # setup-rust provides the configured linker (install-mold above); coverage uses lld
           # compatibility.
           sudo apt-get update \
             && sudo apt-get install --yes --no-install-recommends clang lld
@@ -46,6 +44,8 @@ jobs:
           leynos/shared-actions/.github/actions/install-mdtablefix@4fb8eb7ad52454678a0662865d81d3cd17aa6e0e
         with:
           version: '0.6.0'
+      - name: Check build prerequisites
+        run: make check-build-tools
       - name: Format
         run: make check-fmt
       - name: Markdown lint
@@ -76,30 +76,10 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: '3.x'
-      - name: Cache Whitaker installation
-        id: cache-whitaker
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
-        with:
-          path: |
-            ~/.cargo/bin/whitaker-installer
-            ~/.local/bin/whitaker
-            ~/.dylint_drivers
-            ~/.local/share/whitaker
-          key: whitaker-v3-${{ runner.os }}-${{ env.WHITAKER_INSTALLER_VERSION }}
       - name: Install Whitaker
-        env:
-          RUSTFLAGS: ""
-          WHITAKER_CACHE_HIT: ${{ steps.cache-whitaker.outputs.cache-hit }}
-        run: |
-          set -euo pipefail
-          echo "Whitaker cache hit: ${WHITAKER_CACHE_HIT}"
-          if [ "${WHITAKER_CACHE_HIT}" != "true" ]; then
-            echo "Installing whitaker-installer ${WHITAKER_INSTALLER_VERSION}"
-            cargo binstall --no-confirm --locked \
-              whitaker-installer@"${WHITAKER_INSTALLER_VERSION}"
-          fi
-          whitaker-installer --cranelift
-          echo "Whitaker binary: $(command -v whitaker || true)"
+        uses: leynos/shared-actions/.github/actions/install-whitaker@6dea5677a84fec60ca51b07202570e3af12ffdb4
+        with:
+          cranelift: 'true'
       - name: Audit dependencies
         if: github.actor != 'dependabot[bot]'
         run: make audit
@@ -109,6 +89,7 @@ jobs:
         if: env.ACT != 'true'
         run: |
           echo "Coverage linker: clang"
+          echo "Coverage codegen backend: llvm"
           echo "Coverage RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld"
           echo "Coverage CFLAGS: -fuse-ld=lld"
           echo "Coverage LDFLAGS: -fuse-ld=lld"
@@ -116,14 +97,20 @@ jobs:
         if: env.ACT == 'true'
         run: make test
       - name: Test and Measure Coverage
-        if: github.event_name == 'pull_request' && env.ACT != 'true'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        if: env.ACT != 'true'
+        uses: leynos/shared-actions/.github/actions/generate-coverage@d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+          CARGO_PROFILE_DEV_CODEGEN_BACKEND: llvm
           RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld
           CFLAGS: -fuse-ld=lld
           LDFLAGS: -fuse-ld=lld
         with:
+          language: rust
+          cargo-manifest: Cargo.toml
+          all-targets: 'true'
+          all-features: 'true'
+          doctests: 'true'
           output-path: lcov.info
           format: lcov
           with-ratchet: 'true'

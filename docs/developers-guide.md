@@ -16,10 +16,11 @@ durable modes when implementing storage.
 
 ## Local Workflow
 
-Use `make all` as the public entrypoint for formatting, linting, and tests.
-`make lint` runs rustdoc, Clippy, and Whitaker. `make test` prefers
-`cargo nextest run` and falls back to `cargo test` when cargo-nextest is not
-available. `make check-fmt` verifies Rust formatting with
+Use `make all` as the public entrypoint for formatting, linting, and tests. It
+recurses through each cache-consuming gate in order, even under `make -j`.
+`make lint` runs rustdoc and Clippy, then Whitaker, in that order. `make test`
+prefers `cargo nextest run` and falls back to `cargo test` when cargo-nextest
+is not available. `make check-fmt` verifies Rust formatting with
 `cargo fmt --all -- --check` and Markdown formatting with
 `mdtablefix --check --git --include-untracked`, and `make fmt` formats Rust
 sources with nightly `rustfmt` and Markdown with `mdtablefix --in-place`
@@ -54,31 +55,38 @@ Testing" section for behaviour, and promote surviving mutants into new tests.
 `main`, and is the only CodeScene caller; `ci.yml` measures pull requests for
 their own ratchet, at the same `generate-coverage` revision with
 `publish-artefact: 'false'`, and names no CodeScene token, host or command. The
-publisher job runs in the `codescene` environment, which admits `main` alone
-and holds `CS_ACCESS_TOKEN` as an environment secret. A
-`Check CodeScene token availability` step (id `codescene_token`) runs exactly
-`echo "available=${{ secrets.CS_ACCESS_TOKEN != '' }}" >> "$GITHUB_OUTPUT"`,
-with no `if:` and no `env`. The upload runs only when that output is `true` and
-`github.ref` is `refs/heads/main`, takes the token as its `access-token` input
-so the workflow binds it in no `env` of its own, and uploads with
-`mode: upload` and no checksum input. Publisher runs share the concurrency group
-`coverage-main-${{ github.ref }}` with `cancel-in-progress: false`: a running
-publisher is never cancelled, and a newer trigger replaces an older pending
-run, so the newest trigger's run is the one that publishes. A merge made by the
-Dependabot automerge workflow's `GITHUB_TOKEN` fires no push event, so it
-publishes nothing until a dispatch from `main` or the next push.
-`make test-workflow-contracts` holds the shape over the committed workflows by
-running `cv005-contracts check`, the shared contract library in
-`leynos/shared-actions` (`packages/cv005-contracts`), from a full commit named
-by `CV005_CONTRACTS_REF` in the Makefile; CI runs it in a "Check the CV-005
-contracts" step. A fix to the rules is therefore a pin bump. The target needs
-`uv`, which fetches the Python 3.13 the library runs under. The repository's
-parameters are in `.github/cv005.toml`: its `repository` name and one
-`[[pairing]]` for the pull-request coverage step, whose condition is the
-pull-request guard plus `env.ACT != 'true'`, because the Act validation run
-executes `make test` in its place (`tests/act_workflow.rs` holds that split).
+publisher's concurrency group is `${{ github.workflow }}-${{ github.ref }}` with
+`cancel-in-progress: false`. GitHub may replace a pending run, but that queue
+behaviour does not prove which trigger eventually publishes.
 
-## Tooling
+The uploader runs only for a `main` ref and receives `CS_ACCESS_TOKEN` through
+its `access-token` input when the availability check succeeds. The checked-in
+workflow names the protected `codescene` environment, but repository files do
+not prove that the environment admits a ref or that its token is provisioned. A
+manual dispatch can rerun coverage, while `publish-baseline: auto` writes the
+ratchet baseline only for a push; a dispatch leaves the baseline unchanged.
+`make test-workflow-contracts` runs the shared CV-005 contracts against the
+committed workflows. The repository-specific pairing is recorded in
+`.github/cv005.toml`; a change to shared contract policy is consumed by
+updating the full commit pinned in the Makefile.
+
+## Lint baseline
+
+`Cargo.toml` holds the project lint policy and `clippy.toml` holds its numeric
+thresholds and disallowed APIs. The baseline comes from Concordat
+`8a4a1faba1290687c0b6b221e1fc96439ba3ba43`, including `rust-build-defaults`
+0.1.1; this repository extends it with the measured, zero-finding
+`clippy::missing_docs_in_private_items` denial. New workspace members must
+inherit the same Cargo lint tables and root Clippy configuration.
+
+Fix findings at their source. A narrowly scoped exception needs a reason and
+must preserve the rule everywhere else. Keep cognitive complexity at 9,
+arguments at 4, lines at 70, and nesting at 4. Inject environment access through
+`mockable::Env` rather than reading or mutating the process environment
+outside the production composition root. The dated toolchain and its required
+components are recorded in `rust-toolchain.toml`; run
+`make install-build-tools` and `make check-build-tools` before development
+builds on a fresh checkout.
 
 ### Polonius borrow checker
 
@@ -101,8 +109,9 @@ Development builds use Cranelift for debug code generation. On Linux targets,
 quickly. Coverage generation uses `lld` because LLVM coverage tooling expects
 LLVM-compatible linker behaviour.
 
-Install `clang`, `lld`, `mold`, `python3`, `uv`, and `cargo-audit` before
-running the full generated workflow locally on Linux.
+Install `clang`, `lld`, `python3`, and `cargo-audit`, then run
+`make install-build-tools`, before running the full generated workflow locally
+on Linux.
 
 ## The build standard
 
@@ -132,12 +141,17 @@ development target on a Linux host and a macOS host (each keeping the caller's
 own `RUSTFLAGS`) and for each coverage and release target on a Linux host, and
 the `setup-rust` steps of the CI workflows (each must pass `install-mold`), so
 a flag lost through a recipe or workflow edit fails there.
+`tests/build_standard_support/ci_steps.rs` owns its `Workflow` reader as
+test-only repository-CI YAML code; it is not an application or shared parsing
+API. `tests/build_standard_support/workflow_routes.rs` and its private runner
+sibling own only test-contract interpretation of GitHub Actions runner forms;
+they are not reusable workflow-parsing APIs.
 
 ### Cranelift
 
-Cranelift is the development-profile codegen backend. The full suite was
-measured under it on the pinned `nightly-2026-08-27` on 2026-09-28: all 13
-nextest tests and the doctests pass. Coverage selects LLVM explicitly
+Cranelift is the development-profile codegen backend. Final integrated
+validation must run the full suite on the pinned nightly before recording a
+passing result. Coverage selects LLVM explicitly
 (`CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm`), because instrumentation needs it,
 and release builds use the release profile, which Cranelift does not touch.
 Re-measure the whole suite on the next toolchain bump; if it fails, record the
@@ -149,13 +163,13 @@ failing tests here as an exception and remove the backend from
 Markdown uses en-GB-oxendict spelling enforced by the shared
 `typos-config-builder` gate. Run `make spelling`.
 
-`typos.toml` is generated output. The gate regenerates it on every run from the
-live shared estate dictionary and the `typos.local.toml` overlay, so a word
-added to the shared dictionary needs no change here. Because the dictionary is
-live, `typos.toml` must never be drift checked in continuous integration. Add
-narrow repository-specific identifier, API, proper-name, or fixture exceptions
-to `typos.local.toml`; hand-editing `typos.toml` is not supported and any edits
-are overwritten on the next run.
+`typos.toml` is generated, tracked output. The gate regenerates it on every run
+from the live shared estate dictionary and the `typos.local.toml` overlay, so a
+word added to the shared dictionary needs no change here. Commit regenerated
+output with spelling-policy changes, but never hand-edit it. Because the
+dictionary is live, continuous integration must not drift-check `typos.toml`.
+Add narrow repository-specific identifier, API, proper-name, or fixture
+exceptions to `typos.local.toml`; hand edits are overwritten on the next run.
 
 ### Security audit ignores
 
@@ -174,19 +188,25 @@ the test fails until a human edits the pinned constant to match. That defeats
 the purpose of automated dependency updates and turns a routine bump into a
 manual chore.
 
-The narrow `RUSTFLAGS_PASSTHROUGH_REVISION` exception applies only while no
-independent capability probe can establish that the shared `setup-rust` action
-accepts the required `rustflags` input. In that case, assert the first revision
-that provides the capability and document this boundary beside the test. Remove
-the literal revision assertion once an independent capability probe is
-available.
+`.github/dependabot.yml` updates the root Cargo manifest and GitHub Actions
+daily. Each entry ends with the minor-and-patch catch-all group, leaving majors
+outside any narrower lockstep group in their own pull request.
+
+Dependabot owns the shared `setup-rust` commit pin. Its build-standard contract
+checks the shared action path and requires every setup step to pass
+`install-mold: 'true'`; it does not pin or assert a particular revision. The
+`INSTALL_WHITAKER_ACTION` exception still pins the allowlisted strict Whitaker
+installer because that revision is a policy boundary rather than a routine
+dependency update.
 
 Contract tests may still verify the *shape* of a reusable-workflow caller. They
 must not verify the specific SHA value.
 
 - Do assert the workflow references the correct reusable workflow path.
-- Do assert the ref is pinned to a full 40-character commit SHA, not a
-  mutable branch such as `main` or `rolling`.
+- For `setup-rust`, do assert the expected shared action path and required
+  inputs, while leaving the revision value to Dependabot.
+- Where an independent policy requires immutable action refs, assert the ref
+  shape without copying one fixed revision into the contract.
 - Do assert the expected `on:` triggers, least-privilege `permissions:`, and
   the inputs the caller relies on.
 - Do not hard-code the current SHA value as an expected string. Match it with
@@ -205,27 +225,27 @@ def test_uses_pinned_full_sha(caller_step):
 
 If a workflow's behaviour genuinely depends on a feature only present from a
 particular commit onwards, express that as a comment or a changelog note, not
-as a test assertion on the SHA string. The sole exception is the
-`RUSTFLAGS_PASSTHROUGH_REVISION` boundary above: until an independent probe can
-confirm that `setup-rust` supports `rustflags`, document and assert the first
-capable revision. Remove that literal revision assertion once the probe exists.
+as a test assertion on the SHA string. The strict allowlisted
+`INSTALL_WHITAKER_ACTION` remains policy-pinned; the shared `setup-rust` action
+continues to use Dependabot's revision.
 
 ## Act validation linker prerequisites
 
-The Act validation workflow installs and probes `clang` and `mold` on its
-Ubuntu runner before `make test WITH_ACT=1`. Cargo links the outer test
-binaries using the repository's Linux linker configuration before any nested
-Act jobs can run. Container-local packages cannot satisfy this host
-requirement. The workflow ordering contract is covered by
-`tests/act_workflow.rs`. The nested Act run disables the shared `setup-rust`
-sccache accelerator and skips coverage and artefact upload because Act
-containers cannot provide the GitHub Actions cache or runtime-token services
-those steps require. It runs `make test` instead; normal CI retains sccache and
-coverage.
+The Act validation workflow provisions pinned `mold` through `setup-rust`,
+installs and probes `clang`, then runs `make check-build-tools` before
+`make test WITH_ACT=1`. Cargo links the outer test binaries using the
+repository's Linux linker configuration before any nested Act jobs can run.
+Container-local packages cannot satisfy this host requirement. The workflow
+ordering contract is covered by `tests/act_workflow.rs`. The nested Act run
+disables the shared `setup-rust` sccache accelerator. It skips coverage and
+artefact upload because Act containers cannot provide the GitHub Actions cache
+or runtime-token services those steps require. It runs `make test` instead;
+normal CI retains sccache and coverage.
 
 ## Markdown formatting
 
-Markdown follows the estate's `markdown-formatting-baseline` rule.
+Markdown follows Concordat `8a4a1faba1290687c0b6b221e1fc96439ba3ba43`'s
+`markdown-formatting-baseline` 0.2.0 rule.
 
 - `make fmt` rewrites Markdown with
   `mdtablefix --in-place --git --include-untracked --wrap --renumber --breaks
@@ -236,15 +256,45 @@ Markdown follows the estate's `markdown-formatting-baseline` rule.
 - `--git --include-untracked` selects the Markdown files Git tracks plus the
   untracked files Git does not ignore, so a new document is checked before it
   is staged.
-- `.markdownlint-cli2.jsonc` carries the canonical markdownlint configuration.
-  Keep its `config` entries and `ignores` globs; add repository-specific rules
-  or globs beside them.
+- `.markdownlint-cli2.jsonc` carries the canonical markdownlint configuration:
+  MD010 excludes code blocks, while MD013 enforces 80-column prose and
+  120-column code blocks without wrapping headings or tables. These distinct
+  settings are not interchangeable.
 - CI installs mdtablefix 0.6.0 with the shared `install-mdtablefix` action
   before `make check-fmt`, and lints Markdown with
   `DavidAnson/markdownlint-cli2-action` over `**/*.md`.
 
 Install mdtablefix 0.6.0 or later locally with
 `cargo binstall --no-confirm mdtablefix@0.6.0`, or
-`cargo install --locked mdtablefix@0.6.0`. Install markdownlint-cli2 with
-`bun add --global markdownlint-cli2` or
-`npm install --global markdownlint-cli2`.
+`cargo install --locked mdtablefix@0.6.0`. Install markdownlint-cli2 0.23.3 with
+`bun add --global markdownlint-cli2@0.23.3` or
+`npm install --global markdownlint-cli2@0.23.3`.
+
+## Spelling configuration
+
+`make spelling` uses `typos-config-builder` v0.1.3's supported `gate`
+subcommand. It regenerates tracked `typos.toml`; commit that output when this
+spelling migration changes it, never hand-edit it, and do not add a drift check
+for it. Put narrowly scoped Mornington terms in `typos.local.toml`. The
+baseline was selected from Concordat `8a4a1faba1290687c0b6b221e1fc96439ba3ba43`
+under `spelling-config-baseline` 0.1.0. Its observed shared-dictionary content
+has SHA-256 `d67b4110813615a4eda3e8962e898466191e4af25b2e28baedcbab348696aeac`.
+
+The prior blanket inline-code exclusion was removed: spelling policy now reads
+inline code and accepts only repository-specific exceptions in the overlay.
+
+## Build tool prerequisites
+
+`make install-build-tools` installs the dated nightly toolchain and its listed
+components, then downloads mold 2.41.0 from its release archive only after the
+repository-pinned SHA-256 matches. It never compiles or installs mold through a
+package-manager fallback. `make check-build-tools` verifies the toolchain,
+components, clang, and the exact mold version before each development target.
+`make check-coverage-tools` additionally requires `ld.lld`.
+
+CI uses the strict Whitaker provisioner pinned at
+`6dea5677a84fec60ca51b07202570e3af12ffdb4`, as allowlisted by
+`whitaker-provisioning` 0.1.0. The action's current live descendant was
+inspected at `d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79`; it rejects suite
+overrides and uses no source fallback. Whitaker runs without the development
+`RUSTFLAGS` injection.

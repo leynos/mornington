@@ -23,8 +23,7 @@
   related to a domain concept rather than splitting by type.
 - **Use consistent spelling and grammar.** Comments must use en-GB-oxendict
   ("-ize" / "-yse" / "-our") spelling and grammar, with the exception of
-  references to external APIs. Prose is enforced mechanically by the
-  en-GB-oxendict spelling gate in `make markdownlint` and `make spelling`.
+  references to external APIs.
 - **Illustrate with clear examples.** Function documentation must include clear
   examples demonstrating the usage and outcome of the function. Test
   documentation should omit examples where the example serves only to reiterate
@@ -155,6 +154,10 @@ cloned only on insertion, and error context is built lazily. See
 - Verify new borrow-sensitive code with the project toolchain and classify it
   with and without `-Zpolonius=next` as described in `docs/polonius.md`.
 
+- On a fresh Linux checkout, run `make install-build-tools` and then
+  `make check-build-tools` before build, test, lint, or typecheck work. The
+  preflight installs the pinned toolchain and checksum-verified mold binary;
+  `fmt` and `check-fmt` do not require it.
 - Run `make check-fmt`, `make lint`, and `make test` before committing. These
   targets wrap the following commands, so contributors understand the exact
   behaviour and policy enforced:
@@ -177,8 +180,21 @@ cloned only on insertion, and error context is built lazily. See
   - `make lint` executes:
 
     ```makefile
+    make check-build-tools
+    make lint-clippy
+    make lint-whitaker
+    ```
+
+    `make lint-clippy` executes:
+
+    ```makefile
     RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$(DEV_RUST_FLAGS)" cargo doc --no-deps
     cargo clippy --workspace --all-targets --all-features -- -D warnings
+    ```
+
+    `make lint-whitaker` executes:
+
+    ```makefile
     RUSTFLAGS="$(DEV_RUST_FLAGS)" whitaker --all -- --all-targets --all-features
     ```
 
@@ -372,10 +388,6 @@ cloned only on insertion, and error context is built lazily. See
 
 - Validate Markdown files using `make markdownlint`. This target also runs the
   en-GB-oxendict spelling gate.
-- Enforce spelling with `make spelling`. It regenerates `typos.toml` from the
-  live shared dictionary and the `typos.local.toml` overlay on every run, so
-  `typos.toml` must not be drift checked in CI. Put narrow repository-specific
-  exceptions in `typos.local.toml`; never edit generated entries by hand.
 - Run `make fmt` after any documentation changes to format all Markdown
   files and fix table markup.
 - Validate Mermaid diagrams in Markdown files by running `make nixie`.
@@ -385,6 +397,22 @@ cloned only on insertion, and error context is built lazily. See
 - Use dashes (`-`) for list bullets.
 - Use GitHub-flavoured Markdown footnotes (`[^1]`) for references and
   footnotes.
+
+<!-- typos-config-builder:agents-md:start -->
+
+## Spelling
+
+- `make spelling` runs the pinned `typos-config-builder gate`, which
+  regenerates `typos.toml` from the shared en-GB-oxendict dictionary and
+  `typos.local.toml`, then checks spelling and the shared phrase corrections.
+- `typos.toml` is generated: never edit it by hand. Put narrow
+  repository-specific exceptions in `typos.local.toml`, as exact or full-line
+  patterns rather than bare accepted words.
+- When `make spelling` changes `typos.toml`, commit the regenerated file. If
+  the change is unrelated to your work, commit it in a separate base pull
+  request and stack your branch on it, so each review diff stays focused.
+
+<!-- typos-config-builder:agents-md:end -->
 
 ## Project documentation
 

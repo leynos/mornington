@@ -7,7 +7,11 @@ MDTABLEFIX ?= mdtablefix
 MDTABLEFIX_SELECT = --git --include-untracked
 MDTABLEFIX_RULES = --wrap --renumber --breaks --ellipsis --fences
 
-.PHONY: help all clean test build release coverage lint fmt check-fmt markdownlint spelling nixie audit rust-audit test-workflow-contracts
+.PHONY: help all clean test build release coverage lint lint-clippy lint-whitaker fmt check-fmt markdownlint spelling nixie audit rust-audit test-workflow-contracts install-build-tools check-build-tools check-coverage-tools
+
+# The public composite target recurses one gate at a time, even when callers
+# pass `-j`, so shared build caches never receive overlapping gate work.
+.NOTPARALLEL: all
 
 SHELL := bash
 
@@ -16,6 +20,9 @@ TARGET ?= mornington
 
 USER_WHITAKER := $(HOME)/.local/bin/whitaker
 USER_BIN_PATH := $(HOME)/.cargo/bin:$(HOME)/.local/bin:$(HOME)/.bun/bin
+BUILD_TOOLS_PREFIX ?= $(HOME)/.local
+export BUILD_TOOLS_PREFIX
+export PATH := $(BUILD_TOOLS_PREFIX)/bin:$(USER_BIN_PATH):$(PATH)
 CARGO ?= cargo
 BUILD_JOBS ?=
 # RUSTFLAGS overrides .cargo/config.toml, so recipes that set it must re-state
@@ -34,19 +41,20 @@ DEV_RUST_FLAGS ?= $(RUST_FLAGS) $(POLONIUS_FLAGS) $(STANDARD_THREADS_FLAG) $(DEV
 RUSTDOC_FLAGS ?=
 RUSTDOC_FLAGS := --cfg docsrs -D warnings $(POLONIUS_FLAGS) $(RUSTDOC_FLAGS)
 CARGO_FLAGS ?= --all-targets --all-features
-CLIPPY_FLAGS ?= $(CARGO_FLAGS) -- $(RUST_FLAGS)
+CLIPPY_FLAGS ?= --workspace $(CARGO_FLAGS) -- $(RUST_FLAGS)
 TEST_FLAGS ?= $(CARGO_FLAGS)
 TEST_CMD := $(if $(shell $(CARGO) nextest --version 2>/dev/null),nextest run,test)
 COVERAGE_LINKER_FLAGS ?= -fuse-ld=lld
 COVERAGE_RUST_FLAGS ?= $(RUST_FLAGS) $(POLONIUS_FLAGS) -C link-arg=$(COVERAGE_LINKER_FLAGS)
 MDLINT ?= markdownlint-cli2
 NIXIE ?= nixie
-TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.1
+TYPOS_CONFIG_BUILDER_VERSION = v0.1.3
 TYPOS_CONFIG_BUILDER = uv tool run --from \
 	"git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_VERSION)" \
 	typos-config-builder
 WHITAKER ?= $(or $(shell command -v whitaker 2>/dev/null),$(wildcard $(USER_WHITAKER)),whitaker)
-
+INSTALL_BUILD_TOOLS ?= scripts/install-build-tools.sh
+CHECK_BUILD_TOOLS ?= scripts/check-build-tools.sh
 UV ?= uv
 UV_ENV = UV_CACHE_DIR=.uv-cache UV_TOOL_DIR=.uv-tools
 # The CV-005 CodeScene contracts live in shared-actions and run from a full
@@ -60,27 +68,34 @@ CV005_CONTRACTS = $(UV_ENV) $(UV) tool run --python 3.13 \
 test-workflow-contracts: ## Check the CV-005 CodeScene workflow contracts
 	$(CV005_CONTRACTS) check --repository .
 
-build: target/debug/$(TARGET) ## Build debug binary
+build: check-build-tools target/debug/$(TARGET) ## Build debug binary
 release: target/release/$(TARGET) ## Build release binary
 
-all: check-fmt lint test test-workflow-contracts ## Perform a comprehensive check of code
+all: ## Perform a comprehensive check of code
+	+$(MAKE) check-fmt
+	+$(MAKE) lint
+	+$(MAKE) test
+	+$(MAKE) test-workflow-contracts
 	+$(MAKE) spelling
 
 clean: ## Remove build artefacts
 	$(CARGO) clean
 	rm -f .typos-oxendict-base.json .typos-oxendict-base.toml
 
-test: ## Run tests with warnings treated as errors
+test: check-build-tools ## Run tests with warnings treated as errors
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) $(TEST_CMD) $(TEST_FLAGS) $(BUILD_JOBS)
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) test --doc --workspace --all-features
 ifeq ($(WITH_ACT),1)
 	act pull_request --workflows .github/workflows/ci.yml --job build-test --platform ubuntu-latest=catthehacker/ubuntu:act-latest --secret GITHUB_TOKEN --env ACT=true
 endif
 
-target/%/$(TARGET): ## Build binary in debug or release mode
-	$(if $(findstring release,$(@)),RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(RUST_FLAGS) $(POLONIUS_FLAGS)",RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)") $(CARGO) build $(BUILD_JOBS) $(if $(findstring release,$(@)),--release) --bin $(TARGET)
+target/debug/$(TARGET): check-build-tools ## Build the debug binary
+	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) build $(BUILD_JOBS) --bin $(TARGET)
 
-coverage: ## Generate lcov coverage with lld for llvm-tools compatibility
+target/release/$(TARGET): ## Build the release binary
+	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(RUST_FLAGS) $(POLONIUS_FLAGS)" $(CARGO) build $(BUILD_JOBS) --release --bin $(TARGET)
+
+coverage: check-coverage-tools ## Generate lcov coverage with lld for llvm-tools compatibility
 	@echo "coverage linker flags: $(COVERAGE_LINKER_FLAGS)"
 	CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang \
 		CARGO_PROFILE_DEV_CODEGEN_BACKEND=llvm \
@@ -89,17 +104,33 @@ coverage: ## Generate lcov coverage with lld for llvm-tools compatibility
 		LDFLAGS="$(COVERAGE_LINKER_FLAGS)" \
 		$(CARGO) llvm-cov --lcov --output-path lcov.info $(TEST_FLAGS)
 
-lint: ## Run Clippy with warnings denied
+install-build-tools: ## Install the pinned toolchain and verified build tools
+	$(INSTALL_BUILD_TOOLS)
+	+$(MAKE) check-build-tools
+
+check-build-tools: ## Verify development build prerequisites
+	$(CHECK_BUILD_TOOLS)
+
+check-coverage-tools: ## Verify LLVM coverage prerequisites
+	$(CHECK_BUILD_TOOLS) --coverage
+
+lint: check-build-tools ## Run rustdoc, Clippy, and Whitaker sequentially
+	+$(MAKE) lint-clippy
+	+$(MAKE) lint-whitaker
+
+lint-clippy: ## Run rustdoc and Clippy with warnings denied
 	RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) doc --no-deps
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) clippy $(CLIPPY_FLAGS)
-	@echo "Whitaker binary: $(WHITAKER)"
-	PATH="$(USER_BIN_PATH):$(PATH)" RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(WHITAKER) --all -- $(CARGO_FLAGS)
 
-typecheck: ## Type-check without building
+lint-whitaker: ## Run Whitaker with development Rust flags
+	@echo "Whitaker binary: $(WHITAKER)"
+	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(WHITAKER) --all -- $(CARGO_FLAGS)
+
+typecheck: check-build-tools ## Type-check without building
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) check $(CARGO_FLAGS)
 
 fmt: ## Format Rust and Markdown sources
-	$(CARGO) +nightly fmt --all
+	$(CARGO) fmt --all
 	$(MDTABLEFIX) --in-place $(MDTABLEFIX_SELECT) $(MDTABLEFIX_RULES)
 	$(MDLINT) --fix "**/*.md"
 
@@ -110,7 +141,8 @@ check-fmt: ## Verify formatting
 markdownlint: ## Lint Markdown files
 	$(MDLINT) '**/*.md'
 	+$(MAKE) spelling
-spelling: ## Enforce en-GB-oxendict spelling in Markdown prose
+
+spelling: ## Enforce en-GB-oxendict spelling in tracked repository files
 	@if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then \
 		echo "make spelling needs a Git repository: the gate enumerates tracked files with git ls-files. Run: git init && git add -A" >&2; \
 		exit 1; \
@@ -119,7 +151,7 @@ spelling: ## Enforce en-GB-oxendict spelling in Markdown prose
 		echo "make spelling found no tracked files: the gate enumerates tracked files with git ls-files. Run: git add -A" >&2; \
 		exit 1; \
 	fi
-	$(TYPOS_CONFIG_BUILDER) gate --repository .
+	$(TYPOS_CONFIG_BUILDER) gate --repository . --scope all
 
 nixie: ## Validate Mermaid diagrams
 	$(NIXIE) --no-sandbox

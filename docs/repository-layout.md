@@ -17,27 +17,38 @@ compact and omits build output such as `target/`.
 │   ├── dependabot.yml
 │   └── workflows/
 │       ├── act-validation.yml
+│       ├── audit.yml
 │       ├── ci.yml
+│       ├── coverage-main.yml
 │       ├── mutation-testing.yml
-
 │       └── release.yml
-
+├── scripts/
+│   ├── check-build-tools.sh
+│   └── install-build-tools.sh
 ├── docs/
 │   ├── contents.md
 │   ├── developers-guide.md
-
 │   ├── polonius.md
-
 │   ├── repository-layout.md
 │   ├── users-guide.md
 │   └── ...
 ├── src/
-
 │   ├── lib.rs
 │   └── main.rs
-
 ├── tests/
-│   └── stub.rs
+│   ├── build_standard_contract.rs
+│   ├── build_standard_ci_contract.rs
+│   ├── build_standard_make_contract.rs
+│   ├── build_standard_support/
+│   ├── build_standard_workflow_routes.rs
+│   ├── build_tools_contract.rs
+│   ├── dependabot_contract.rs
+│   ├── markdown_tooling_contract.rs
+│   └── ...
+├── tools/
+│   └── mold/
+│       ├── SHA256SUMS
+│       └── VERSION
 ├── AGENTS.md
 ├── Cargo.toml
 ├── LICENSE
@@ -57,12 +68,18 @@ compact and omits build output such as `target/`.
   validation through `act` separately from main CI.
 - `.github/workflows/ci.yml`: Runs the generated project's continuous
   integration checks.
+- `.github/workflows/coverage-main.yml`: Publishes main-branch coverage and
+  maintains the coverage ratchet baseline.
 - `.github/workflows/mutation-testing.yml`: Runs scheduled mutation testing
   through the shared `mutation-cargo` reusable workflow.
 
 - `.github/workflows/release.yml`: Builds and publishes binary release
   artefacts for the application flavour.
 
+- `scripts/`: Holds narrowly scoped local build-tool installation and
+  prerequisite-check entrypoints.
+- `tools/mold/`: Records the approved mold version and archive checksums used
+  by the binary-only installer.
 - `docs/terms-of-reference.md`: Defines the product problem, scope, and
   outcomes.
 - `docs/mornington-design.md`: Describes the proposed architecture and
@@ -92,8 +109,17 @@ compact and omits build output such as `target/`.
 
 - `tests/`: Holds integration and behavioural tests that exercise public
   behaviour.
-- `tests/stub.rs`: Keeps the generated test directory valid until real tests
-  replace it.
+- `tests/build_standard_contract.rs`, `tests/build_standard_ci_contract.rs`,
+  `tests/build_standard_make_contract.rs`, and
+  `tests/build_standard_workflow_routes.rs`: Hold static contracts for the
+  development build standard, CI actions, and discovered Linux suite routes.
+- `tests/build_standard_support/`: Holds the focused readers used by those
+  build-standard contracts.
+- `tests/build_tools_contract.rs`, `tests/dependabot_contract.rs`, and
+  `tests/markdown_tooling_contract.rs`: Hold static contracts for the related
+  prerequisite, dependency-update, and Markdown policies.
+- `.github/cv005.toml`: Supplies repository-specific pairing data to the shared
+  CodeScene workflow contract.
 - `AGENTS.md`: Provides repository-specific working instructions for agents and
   contributors.
 - `Cargo.toml`: Defines package metadata, dependencies, lint policy, and Cargo
