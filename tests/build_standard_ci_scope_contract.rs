@@ -72,6 +72,27 @@ fn direct_development_jobs_cannot_bypass_shared_build_provisioning() {
     }
 }
 
+/// Pull-request coverage must not run on push or under `act`.
+#[test]
+fn ci_coverage_stays_in_the_pull_request_lane() {
+    let ci = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/.github/workflows/ci.yml"
+    ));
+    let (_, coverage) = ci
+        .split_once("      - name: Test and Measure Coverage\n")
+        .expect("CI must retain its coverage action step");
+    let condition = coverage
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("if: "))
+        .unwrap_or("");
+    assert!(
+        condition.contains("github.event_name == 'pull_request'")
+            && condition.contains("env.ACT != 'true'"),
+        "CI coverage must be limited to pull requests outside Act: {condition:?}"
+    );
+}
+
 /// Scope mutations reuse the current CI reader's selected setup and Whitaker checks.
 #[test]
 fn current_ci_retains_the_shared_build_standard_contract() -> Result<(), String> {
