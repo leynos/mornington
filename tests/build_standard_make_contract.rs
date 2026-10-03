@@ -11,6 +11,7 @@ use config::{CONFIG, Flags, Pin, THREADS_FLAG, TOOLCHAIN, config_problems};
 use make::{
     Assignment,
     Host,
+    MakeTarget,
     assigned_rustflags,
     commands_from,
     coverage_backend_problems,
@@ -200,7 +201,7 @@ fn coverage_and_release_take_neither_flag() -> Result<(), String> {
 /// independent linker and development-flag exclusions.
 #[test]
 fn coverage_selects_llvm_codegen_and_rejects_backend_mutations() -> Result<(), String> {
-    let output = make_output("coverage", Host::Linux)?;
+    let output = make_output(MakeTarget::Coverage, Host::Linux)?;
     none_of(&coverage_backend_problems(&output))?;
 
     for (name, mutation) in [
@@ -238,7 +239,7 @@ fn coverage_selects_llvm_codegen_and_rejects_backend_mutations() -> Result<(), S
 /// Clippy must keep the repository-wide all-target, all-feature scope.
 #[test]
 fn clippy_uses_workspace_all_targets_and_all_features() -> Result<(), String> {
-    let output = make_output("lint-clippy", Host::Linux)?.replace("\\\n", " ");
+    let output = make_output(MakeTarget::LintClippy, Host::Linux)?.replace("\\\n", " ");
     let expected = "clippy --workspace --all-targets --all-features -- -D warnings";
     if output.contains(expected) {
         Ok(())
@@ -254,7 +255,15 @@ fn clippy_uses_workspace_all_targets_and_all_features() -> Result<(), String> {
 /// assignment must make each part of that contract fail.
 #[test]
 fn release_route_retains_base_flags_and_rejects_mutations() -> Result<(), String> {
-    let is_release_route = |assignment: &Assignment| match assignment {
+    for (host, name) in [(Host::Linux, "Linux"), (Host::Darwin, "Darwin")] {
+        release_host_route_is_valid(host, name)?;
+    }
+    release_mutations_are_rejected()
+}
+
+/// Returns whether an evaluated release assignment keeps only its base flags.
+fn is_release_route(assignment: &Assignment) -> bool {
+    match assignment {
         Assignment::Flags(flags, inherits) => {
             *inherits
                 && flags.names("-Dwarnings")
@@ -263,21 +272,29 @@ fn release_route_retains_base_flags_and_rejects_mutations() -> Result<(), String
                 && !flags.names_linker()
         }
         Assignment::Unassigned => false,
-    };
-    for (host, name) in [(Host::Linux, "Linux"), (Host::Darwin, "Darwin")] {
-        let commands = make_commands("release", host)?;
-        let [command] = commands.as_slice() else {
-            return Err(format!(
-                "make release on {name} must print one Cargo command, got {commands:?}"
-            ));
-        };
-        if !is_release_route(command) {
-            return Err(format!(
-                "make release on {name} lost caller, warning, or Polonius flags, or acquired \
-                 development flags: {command:?}"
-            ));
-        }
     }
+}
+
+/// Checks one host's evaluated release route.
+fn release_host_route_is_valid(host: Host, name: &str) -> Result<(), String> {
+    let commands = make_commands(MakeTarget::Release, host)?;
+    let [command] = commands.as_slice() else {
+        return Err(format!(
+            "make release on {name} must print one Cargo command, got {commands:?}"
+        ));
+    };
+    if is_release_route(command) {
+        Ok(())
+    } else {
+        Err(format!(
+            "make release on {name} lost caller, warning, or Polonius flags, or acquired \
+             development flags: {command:?}"
+        ))
+    }
+}
+
+/// Proves each flag or inheritance mutation invalidates the release route.
+fn release_mutations_are_rejected() -> Result<(), String> {
     let approved =
         "RUSTFLAGS=\"${RUSTFLAGS:+$RUSTFLAGS }-D warnings -Zpolonius=next\" cargo build --release";
     if !is_release_route(&assigned_rustflags(approved)?) {

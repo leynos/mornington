@@ -1,5 +1,8 @@
 //! Typed, test-only line contexts used by the parent CI workflow reader.
 
+#[path = "context/runner.rs"]
+mod runner;
+
 /// Workflow actions inspected by the build-standard contract.
 #[derive(Clone, Copy)]
 pub(super) enum Action {
@@ -116,123 +119,87 @@ impl Job<'_> {
     }
 
     fn provision_problems(&self, provision: &Provision<'_>) -> Vec<String> {
-        if !self.is_direct_development_route() {
-            return Vec::new();
-        }
-        match self.runs_on_linux() {
+        match self.is_direct_linux_route() {
             Ok(false) => return Vec::new(),
             Err(error) => return vec![format!("{}: {error}", provision.workflow_name.0)],
             Ok(true) => {}
         }
-        let first_route = self
-            .steps
-            .iter()
-            .position(Step::direct_route)
-            .unwrap_or_default();
-        let setups: Vec<_> = self
-            .steps
-            .iter()
-            .enumerate()
-            .filter(|(_, step)| step.contains_action(Action::SetupRust))
-            .collect();
+        let first_route = self.first_direct_route();
+        let setups = self.setup_steps();
         if setups.is_empty() {
             return vec![format!(
                 "{}: the listed workflow has no setup-rust step, so the check proves nothing",
                 provision.workflow_name.0
             )];
         }
+        setups
+            .into_iter()
+            .flat_map(|(position, setup)| {
+                setup.provision_problems(position, first_route, provision)
+            })
+            .collect()
+    }
+
+    /// Returns whether this job directly reaches development work on Linux.
+    fn is_direct_linux_route(&self) -> Result<bool, String> {
+        if self.is_direct_development_route() {
+            self.runs_on_linux()
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Returns the source-order position of the first direct development step.
+    fn first_direct_route(&self) -> usize {
+        self.steps
+            .iter()
+            .position(Step::direct_route)
+            .unwrap_or_default()
+    }
+
+    /// Returns every setup-rust step with its source-order position.
+    fn setup_steps(&self) -> Vec<(usize, &Step<'_>)> {
+        self.steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| step.contains_action(Action::SetupRust))
+            .collect()
+    }
+}
+
+impl Step<'_> {
+    /// Returns every provisioning failure contributed by this setup step.
+    fn provision_problems(
+        &self,
+        position: usize,
+        first_route: usize,
+        provision: &Provision<'_>,
+    ) -> Vec<String> {
         let mut problems = Vec::new();
-        for (position, setup) in setups {
-            if position > first_route {
-                problems.push(format!(
-                    "{}:{}: setup-rust must precede the direct development route",
-                    provision.workflow_name.0,
-                    setup.index + 1
-                ));
-            }
-            if setup.is_hidden() {
-                problems.push(format!(
-                    "{}:{}: setup-rust must not be conditional or soft-failing",
-                    provision.workflow_name.0,
-                    setup.index + 1
-                ));
-            }
-            if !setup.installs_linker() {
-                problems.push(format!(
-                    "{}:{}: a setup-rust step does not pass `install-mold: 'true'`",
-                    provision.workflow_name.0,
-                    setup.index + 1
-                ));
-            }
-            if !setup.uses_action_prefix(provision.setup_action_prefix) {
-                problems.push(format!(
-                    "{}:{}: setup-rust does not use the shared action at {}",
-                    provision.workflow_name.0,
-                    setup.index + 1,
-                    provision.setup_action_prefix.0
-                ));
-            }
+        let workflow = provision.workflow_name.0;
+        let line = self.index + 1;
+        if position > first_route {
+            problems.push(format!(
+                "{workflow}:{line}: setup-rust must precede the direct development route"
+            ));
+        }
+        if self.is_hidden() {
+            problems.push(format!(
+                "{workflow}:{line}: setup-rust must not be conditional or soft-failing"
+            ));
+        }
+        if !self.installs_linker() {
+            problems.push(format!(
+                "{workflow}:{line}: a setup-rust step does not pass `install-mold: 'true'`"
+            ));
+        }
+        if !self.uses_action_prefix(provision.setup_action_prefix) {
+            problems.push(format!(
+                "{workflow}:{line}: setup-rust does not use the shared action at {}",
+                provision.setup_action_prefix.0
+            ));
         }
         problems
-    }
-
-    fn runs_on_linux(&self) -> Result<bool, String> {
-        let Some((at, runner)) = self.lines.iter().enumerate().find_map(|(at, line)| {
-            line.trim()
-                .strip_prefix("runs-on:")
-                .map(|value| (at, value))
-        }) else {
-            return Err("direct development job has no supported runs-on form".to_owned());
-        };
-        if runner.contains("matrix.") {
-            return self.matrix_os_is_linux();
-        }
-        if !runner.trim().is_empty() {
-            return labels_are_linux(Text(runner));
-        }
-        let runner_indent = indent(Text(self.lines.get(at).copied().unwrap_or_default()));
-        let values = self
-            .lines
-            .get(at + 1..)
-            .unwrap_or_default()
-            .iter()
-            .take_while(|line| line.trim().is_empty() || indent(Text(line)) > runner_indent)
-            .filter_map(|line| {
-                let trimmed = line.trim();
-                trimmed
-                    .strip_prefix("- ")
-                    .or_else(|| trimmed.strip_prefix("labels:"))
-            })
-            .collect::<Vec<_>>();
-        if values.is_empty() {
-            return Err("runs-on mapping has no labels".to_owned());
-        }
-        labels_are_linux(Text(&values.join(",")))
-    }
-
-    fn matrix_os_is_linux(&self) -> Result<bool, String> {
-        let values = self.lines.iter().filter_map(|line| {
-            let trimmed = line.trim();
-            trimmed
-                .strip_prefix("os:")
-                .or_else(|| trimmed.strip_prefix("- os:"))
-        });
-        let labels = values
-            .flat_map(|value| {
-                value
-                    .trim()
-                    .trim_matches(|character| matches!(character, '[' | ']'))
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|label| !label.is_empty())
-                    .map(str::to_owned)
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        if labels.is_empty() {
-            return Err("matrix runner has no explicit os values".to_owned());
-        }
-        labels_are_linux(Text(&labels.join(",")))
     }
 }
 
@@ -307,47 +274,6 @@ fn is_job_header(line: Text<'_>) -> bool {
 }
 
 fn indent(line: Text<'_>) -> usize { line.0.len() - line.0.trim_start().len() }
-
-fn labels_are_linux(value: Text<'_>) -> Result<bool, String> {
-    let labels = value
-        .0
-        .trim()
-        .trim_matches(|character| matches!(character, '[' | ']'))
-        .split(',')
-        .map(|label| {
-            label
-                .trim()
-                .trim_matches(|character| matches!(character, '\'' | '"'))
-        })
-        .filter(|label| !label.is_empty())
-        .collect::<Vec<_>>();
-    if labels.is_empty() {
-        return Err("runner labels are empty".to_owned());
-    }
-    let mut has_linux = false;
-    let mut has_platform = false;
-    for label in labels {
-        let lower = label.to_ascii_lowercase();
-        let is_linux_or_ubuntu = lower == "linux" || lower.contains("ubuntu");
-        if is_linux_or_ubuntu || lower.contains("-linux") {
-            has_linux = true;
-            has_platform = true;
-        } else if !["macos", "windows", "freebsd"]
-            .iter()
-            .any(|platform| lower.contains(platform))
-        {
-            if lower != "self-hosted" {
-                return Err(format!("unsupported runner label `{label}`"));
-            }
-        } else {
-            has_platform = true;
-        }
-    }
-    if !has_platform {
-        return Err("self-hosted runner has no platform label".to_owned());
-    }
-    Ok(has_linux)
-}
 
 fn collect_steps<'source>(lines: Lines<'_, 'source>, offset: usize) -> Vec<Step<'source>> {
     let starts: Vec<_> = lines

@@ -9,6 +9,10 @@ pub enum Pin {
     Stable,
 }
 
+/// A channel name read from the selected toolchain file.
+#[derive(Clone, Copy)]
+struct Channel<'a>(&'a str);
+
 /// Why a toolchain file cannot select a build-standard channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum PinParseError {
@@ -72,7 +76,7 @@ impl Pin {
     /// Returns the reason when the channel is missing, malformed, repeated, or
     /// unsupported.
     pub fn read(toolchain: &str) -> Result<Self, PinParseError> {
-        let mut declarations: Vec<Result<&str, PinParseError>> = toolchain
+        let mut declarations: Vec<Result<Channel<'_>, PinParseError>> = toolchain
             .lines()
             .enumerate()
             .filter_map(|(index, line)| channel_declaration(line, index + 1))
@@ -98,18 +102,19 @@ impl Pin {
     }
 
     /// Classifies one supported channel name.
-    fn classify(channel: &str) -> Result<Self, PinParseError> {
-        let is_nightly = channel == "nightly" || is_dated_nightly(channel);
-        let is_release = channel.split('.').count() >= 2
-            && channel
+    fn classify(channel: Channel<'_>) -> Result<Self, PinParseError> {
+        let name = channel.0;
+        let is_nightly = name == "nightly" || is_dated_nightly(channel);
+        let is_release = name.split('.').count() >= 2
+            && name
                 .split('.')
                 .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()));
         if is_nightly {
             Ok(Self::Nightly)
-        } else if is_release || matches!(channel, "stable" | "beta") {
+        } else if is_release || matches!(name, "stable" | "beta") {
             Ok(Self::Stable)
         } else {
-            Err(PinParseError::Unknown(channel.to_owned()))
+            Err(PinParseError::Unknown(name.to_owned()))
         }
     }
 
@@ -119,7 +124,10 @@ impl Pin {
 
 /// Returns a channel declaration, preserving malformed declarations for the
 /// caller to reject instead of silently dropping them.
-fn channel_declaration(line: &str, line_number: usize) -> Option<Result<&str, PinParseError>> {
+fn channel_declaration(
+    line: &str,
+    line_number: usize,
+) -> Option<Result<Channel<'_>, PinParseError>> {
     let declaration = without_toml_comment(line).trim();
     let remainder = declaration.strip_prefix("channel")?;
     if remainder
@@ -138,7 +146,7 @@ fn channel_declaration(line: &str, line_number: usize) -> Option<Result<&str, Pi
 }
 
 /// Reads a quoted channel value and rejects trailing tokens or invalid names.
-fn parse_channel_value(value: &str, line_number: usize) -> Result<&str, PinParseError> {
+fn parse_channel_value(value: &str, line_number: usize) -> Result<Channel<'_>, PinParseError> {
     let malformed = || PinParseError::Malformed { line: line_number };
     let Some(quote) = value
         .chars()
@@ -150,9 +158,10 @@ fn parse_channel_value(value: &str, line_number: usize) -> Result<&str, PinParse
     let Some(after_opening_quote) = value.strip_prefix(quote) else {
         return Err(malformed());
     };
-    let Some((channel, trailing)) = after_opening_quote.split_once(quote) else {
+    let Some((channel_name, trailing)) = after_opening_quote.split_once(quote) else {
         return Err(malformed());
     };
+    let channel = Channel(channel_name);
     if !channel_value_is_well_formed(channel, trailing) {
         return Err(malformed());
     }
@@ -160,13 +169,13 @@ fn parse_channel_value(value: &str, line_number: usize) -> Result<&str, PinParse
 }
 
 /// Returns whether a channel value has no trailing text and a valid name.
-fn channel_value_is_well_formed(channel: &str, trailing: &str) -> bool {
+fn channel_value_is_well_formed(channel: Channel<'_>, trailing: &str) -> bool {
     trailing.trim().is_empty() && is_valid_channel_name(channel)
 }
 
 /// Returns whether a channel name contains only ASCII letters, digits, dots, or hyphens.
-fn is_valid_channel_name(channel: &str) -> bool {
-    !channel.is_empty() && channel.chars().all(is_valid_channel_character)
+fn is_valid_channel_name(channel: Channel<'_>) -> bool {
+    !channel.0.is_empty() && channel.0.chars().all(is_valid_channel_character)
 }
 
 /// Returns whether one character is permitted in a channel name.
@@ -176,29 +185,58 @@ const fn is_valid_channel_character(character: char) -> bool {
 
 /// Removes a TOML comment without treating a `#` inside a quoted value as one.
 fn without_toml_comment(line: &str) -> &str {
-    let mut quote = None;
-    let mut escaped = false;
+    let mut state = CommentScan::default();
     for (index, character) in line.char_indices() {
-        if escaped {
-            escaped = false;
-        } else if quote == Some('"') && character == '\\' {
-            escaped = true;
-        } else if let Some(opening_quote) = quote {
-            if character == opening_quote {
-                quote = None;
-            }
-        } else if matches!(character, '\'' | '"') {
-            quote = Some(character);
-        } else if character == '#' {
+        if state.starts_comment(character) {
             return line.get(..index).unwrap_or(line);
         }
     }
     line
 }
 
+/// Quote and escape state while scanning one TOML source line.
+#[derive(Default)]
+struct CommentScan {
+    quote: Option<char>,
+    escaped: bool,
+}
+
+impl CommentScan {
+    /// Advances the scanner and reports whether this character starts a comment.
+    fn starts_comment(&mut self, character: char) -> bool {
+        if self.consume_escape(character) {
+            return false;
+        }
+        if self.update_quote(character) {
+            return false;
+        }
+        self.quote.is_none() && character == '#'
+    }
+
+    /// Consumes double-quoted escapes before quote or comment interpretation.
+    fn consume_escape(&mut self, character: char) -> bool {
+        if self.escaped {
+            self.escaped = false;
+            return true;
+        }
+        self.escaped = self.quote == Some('"') && character == '\\';
+        self.escaped
+    }
+
+    /// Opens or closes a single- or double-quoted TOML string.
+    const fn update_quote(&mut self, character: char) -> bool {
+        match self.quote {
+            Some(opening_quote) if character == opening_quote => self.quote = None,
+            None if matches!(character, '\'' | '"') => self.quote = Some(character),
+            _ => return false,
+        }
+        true
+    }
+}
+
 /// Returns whether `channel` is an ISO-shaped dated nightly channel.
-fn is_dated_nightly(channel: &str) -> bool {
-    let Some(date) = channel.strip_prefix("nightly-") else {
+fn is_dated_nightly(channel: Channel<'_>) -> bool {
+    let Some(date) = channel.0.strip_prefix("nightly-") else {
         return false;
     };
     let parts: Vec<_> = date.split('-').collect();
