@@ -6,6 +6,12 @@ mod ci_steps;
 use ci_steps::{SETUP_RUST_ACTION_PREFIX, Workflow, workflow_problems};
 use rstest::rstest;
 
+/// The live pull-request workflow under the same fixture contracts.
+const CI_WORKFLOW: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/.github/workflows/ci.yml"
+));
+
 /// A workflow step that passes the input, quoted.
 const STEP_INSTALLS: &str = concat!(
     "    steps:\n      - name: Setup Rust\n",
@@ -110,6 +116,7 @@ const WHITAKER_WITH_UNAPPROVED_ACTION: &str = concat!(
 #[rstest]
 #[case::llvm_backend(COVERAGE_WITH_LLVM, 0)]
 #[case::missing_backend(COVERAGE_WITHOUT_LLVM, 1)]
+#[case::live_ci(CI_WORKFLOW, 0)]
 fn coverage_steps_select_the_llvm_backend(#[case] workflow: &str, #[case] expected: usize) {
     let found = Workflow::new("fixture.yml", workflow)
         .coverage_backend_problems()
@@ -148,6 +155,7 @@ fn coverage_steps_keep_rustflags_out_of_the_development_standard(
 #[rstest]
 #[case::approved(WHITAKER_WITH_APPROVED_ACTION, 0)]
 #[case::unapproved(WHITAKER_WITH_UNAPPROVED_ACTION, 2)]
+#[case::live_ci(CI_WORKFLOW, 0)]
 fn whitaker_provisioning_is_strict(#[case] workflow: &str, #[case] expected: usize) {
     let found = Workflow::new("fixture.yml", workflow)
         .whitaker_provisioning_problems()
@@ -207,24 +215,6 @@ fn strict_whitaker_installer_precedes_lint() {
     );
 }
 
-/// CI coverage must explicitly override the development profile's Cranelift
-/// backend for LLVM instrumentation.
-#[test]
-fn ci_coverage_selects_llvm() {
-    let problems = Workflow::new(
-        "ci.yml",
-        include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/.github/workflows/ci.yml"
-        )),
-    )
-    .coverage_backend_problems();
-    assert!(
-        problems.is_empty(),
-        "CI coverage must select the LLVM backend: {problems:#?}"
-    );
-}
-
 /// Pull-request and main coverage share every execution field except publishing.
 #[test]
 fn coverage_lanes_share_the_selected_execution_contract() {
@@ -265,23 +255,6 @@ fn coverage_lanes_share_the_selected_execution_contract() {
     assert!(
         !ci.contains("codescene"),
         "the pull-request lane must not include the CodeScene publisher"
-    );
-}
-
-/// CI uses the allowlisted strict shared action to provision Whitaker.
-#[test]
-fn ci_provisions_whitaker_strictly() {
-    let problems = Workflow::new(
-        "ci.yml",
-        include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/.github/workflows/ci.yml"
-        )),
-    )
-    .whitaker_provisioning_problems();
-    assert!(
-        problems.is_empty(),
-        "CI must use the strict allowlisted Whitaker provisioner: {problems:#?}"
     );
 }
 

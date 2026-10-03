@@ -115,6 +115,15 @@ impl Drop for ProbeCargo {
     }
 }
 
+/// One test command captured by the recording Cargo stub.
+#[derive(Debug)]
+struct RecordedCall<'a> {
+    /// The exact flags the recipe supplied.
+    rustflags: &'a str,
+    /// The Cargo arguments the recipe supplied.
+    arguments: &'a str,
+}
+
 /// Runs the evaluated test recipe with either arm of its `WITH_ACT` conditional.
 fn evaluated_test_output(probe: &ProbeCargo, with_act: bool) -> Result<String, String> {
     let mut command = Command::new("make");
@@ -215,6 +224,12 @@ pub fn failing_preflight_stops_test_suite() -> Result<(), String> {
 pub fn test_commands_preserve_caller_rustflags() -> Result<(), String> {
     const CALLER_FLAGS: &str = "-C target-cpu=native";
     let probe = ProbeCargo::new()?;
+    run_recording_make_test(&probe, CALLER_FLAGS)?;
+    validate_test_calls(&probe.recorded_calls()?)
+}
+
+/// Executes the test target with the recording Cargo stub.
+fn run_recording_make_test(probe: &ProbeCargo, caller_flags: &str) -> Result<(), String> {
     let output = Command::new("make")
         .args([
             "--always-make",
@@ -226,22 +241,30 @@ pub fn test_commands_preserve_caller_rustflags() -> Result<(), String> {
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .env("PATH", probe.path()?)
         .env("CARGO_RECORD", probe.record_path())
-        .env("RUSTFLAGS", CALLER_FLAGS)
+        .env("RUSTFLAGS", caller_flags)
         .output()
         .map_err(|error| format!("running make test with recording Cargo: {error}"))?;
-    if !output.status.success() {
-        return Err(format!(
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
             "make test with recording Cargo failed: {}",
             String::from_utf8_lossy(&output.stderr)
-        ));
+        ))
     }
+}
 
-    let recorded_calls = probe.recorded_calls()?;
+/// Parses and validates the suite and doctest calls captured by the stub.
+fn validate_test_calls(recorded_calls: &str) -> Result<(), String> {
     let test_calls: Vec<_> = recorded_calls
         .lines()
         .filter_map(|call| call.split_once('\t'))
         .filter(|(_, arguments)| {
             arguments.starts_with("nextest run ") || arguments.starts_with("test --doc ")
+        })
+        .map(|(rustflags, arguments)| RecordedCall {
+            rustflags,
+            arguments,
         })
         .collect();
     let [suite, doctest] = test_calls.as_slice() else {
@@ -249,10 +272,16 @@ pub fn test_commands_preserve_caller_rustflags() -> Result<(), String> {
             "make test must send suite and doctest commands to the stub, got {test_calls:?}"
         ));
     };
-    if !suite.1.starts_with("nextest run ") || !doctest.1.starts_with("test --doc ") {
+    if !suite.arguments.starts_with("nextest run ") || !doctest.arguments.starts_with("test --doc ")
+    {
         return Err(format!("unexpected make test commands: {test_calls:?}"));
     }
 
+    validate_required_flags(&test_calls)
+}
+
+/// Checks every captured test command for the caller and development flags.
+fn validate_required_flags(test_calls: &[RecordedCall<'_>]) -> Result<(), String> {
     let required_flag_sequences: &[&[&str]] = &[
         &["-C", "target-cpu=native"],
         &["-D", "warnings"],
@@ -260,8 +289,8 @@ pub fn test_commands_preserve_caller_rustflags() -> Result<(), String> {
         &["-Zthreads=8"],
         &["-C", "link-arg=-fuse-ld=mold"],
     ];
-    for (flags, command) in test_calls {
-        let actual: Vec<_> = flags.split_whitespace().collect();
+    for call in test_calls {
+        let actual: Vec<_> = call.rustflags.split_whitespace().collect();
         for required in required_flag_sequences {
             if !actual
                 .windows(required.len())
@@ -269,7 +298,9 @@ pub fn test_commands_preserve_caller_rustflags() -> Result<(), String> {
             {
                 return Err(format!(
                     "make test command `{command}` did not receive `{required:?}` in RUSTFLAGS \
-                     `{flags}`"
+                     `{flags}`",
+                    command = call.arguments,
+                    flags = call.rustflags,
                 ));
             }
         }

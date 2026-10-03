@@ -174,7 +174,12 @@ a flag lost through a recipe or workflow edit fails there.
 test-only repository-CI YAML code; it is not an application or shared parsing
 API. `tests/build_standard_support/workflow_routes.rs` and its private runner
 sibling own only test-contract interpretation of GitHub Actions runner forms;
-they are not reusable workflow-parsing APIs.
+they are not reusable workflow-parsing APIs. The private `MakeTarget` model in
+`tests/build_standard_support/make.rs` owns only evaluated Make routes, and the
+strict channel parser in `tests/build_standard_support/config/pin.rs` owns only
+the checked-in toolchain contract. Keep these test readers feature-local;
+compose their public contract queries rather than reusing their parsing
+internals in production code.
 
 ### Cranelift
 

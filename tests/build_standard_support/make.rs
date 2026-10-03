@@ -9,10 +9,49 @@ use super::config::{Flags, LINKER_FLAG, Pin, Problems, THREADS_FLAG};
 /// `RUSTFLAGS` with the standard flags or assigns none and so takes the
 /// configuration's. The list is this repository's own, and a target that stops
 /// being defined fails the contract rather than dropping out of it.
-const DEVELOPMENT_TARGETS: &[&str] = &["test", "typecheck", "lint", "build"];
+const DEVELOPMENT_TARGETS: &[MakeTarget] = &[
+    MakeTarget::Test,
+    MakeTarget::Typecheck,
+    MakeTarget::Lint,
+    MakeTarget::Build,
+];
 /// Makefile targets that measure or ship, so every command assigns `RUSTFLAGS`
 /// and none carries a standard flag.
-const HELD_OUT_TARGETS: &[&str] = &["coverage", "release"];
+const HELD_OUT_TARGETS: &[MakeTarget] = &[MakeTarget::Coverage, MakeTarget::Release];
+
+/// A Make target whose evaluated Cargo commands form part of this contract.
+#[derive(Clone, Copy)]
+pub enum MakeTarget {
+    /// The normal test route.
+    Test,
+    /// The Rust type-checking route.
+    Typecheck,
+    /// The aggregate lint route.
+    Lint,
+    /// The development build route.
+    Build,
+    /// The LLVM coverage route.
+    Coverage,
+    /// The release build route.
+    Release,
+    /// The Clippy leaf route.
+    LintClippy,
+}
+
+impl MakeTarget {
+    /// Returns the target name accepted by Make.
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Test => "test",
+            Self::Typecheck => "typecheck",
+            Self::Lint => "lint",
+            Self::Build => "build",
+            Self::Coverage => "coverage",
+            Self::Release => "release",
+            Self::LintClippy => "lint-clippy",
+        }
+    }
+}
 
 /// The host `make` is told it runs on, through `BUILD_HOST_OS`.
 #[derive(Clone, Copy)]
@@ -114,13 +153,14 @@ pub fn commands_from(stdout: &str) -> Result<Vec<Assignment>, String> {
 /// Returns the dry-run output for one Make target and host.
 /// # Errors
 /// Returns the reason when Make fails or the target is not defined.
-pub fn make_output(target: &str, host: Host) -> Result<String, String> {
+pub fn make_output(target: MakeTarget, host: Host) -> Result<String, String> {
+    let target_name = target.as_str();
     let output = Command::new("make")
         .args([
             "-n",
             "-B",
             &format!("BUILD_HOST_OS={}", host.make_value()),
-            target,
+            target_name,
         ])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
@@ -128,7 +168,7 @@ pub fn make_output(target: &str, host: Host) -> Result<String, String> {
     let stderr = String::from_utf8_lossy(&output.stderr);
     if !output.status.success() {
         return Err(format!(
-            "`make -n {target}` failed, so it is not defined: {stderr}"
+            "`make -n {target_name}` failed, so it is not defined: {stderr}"
         ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
@@ -137,7 +177,7 @@ pub fn make_output(target: &str, host: Host) -> Result<String, String> {
 /// Runs `make -n` for a target on a host and reads its Cargo commands.
 /// # Errors
 /// Returns an error when Make fails or a Cargo assignment is unreadable.
-pub fn make_commands(target: &str, host: Host) -> Result<Vec<Assignment>, String> {
+pub fn make_commands(target: MakeTarget, host: Host) -> Result<Vec<Assignment>, String> {
     commands_from(&make_output(target, host)?)
 }
 
@@ -177,7 +217,7 @@ pub fn coverage_backend_problems(output: &str) -> Problems {
 /// `RUSTFLAGS` keeps the caller's own flags and restates the frontend flag on a
 /// nightly pin, and mold on Linux.
 fn development_problem(
-    target: &str,
+    target: MakeTarget,
     host: Host,
     pin: Pin,
     assignment: &Assignment,
@@ -187,12 +227,17 @@ fn development_problem(
     };
     if !inherits {
         return Some(format!(
-            "`make {target}` on {} drops the caller's RUSTFLAGS",
+            "`make {}` on {} drops the caller's RUSTFLAGS",
+            target.as_str(),
             host.make_value()
         ));
     }
     let reason = flags.meets(pin, host.takes_linker_flag()).err()?;
-    Some(format!("`make {target}` on {} {reason}", host.make_value()))
+    Some(format!(
+        "`make {}` on {} {reason}",
+        target.as_str(),
+        host.make_value()
+    ))
 }
 
 /// Returns every complaint about the development targets on one host, and how
@@ -204,7 +249,7 @@ fn development_problem(
 pub fn development_problems(host: Host, pin: Pin) -> Result<(Problems, usize), String> {
     let mut problems = Vec::new();
     let mut read = 0;
-    for target in DEVELOPMENT_TARGETS {
+    for &target in DEVELOPMENT_TARGETS {
         let commands = make_commands(target, host)?;
         let target_read = commands
             .iter()
@@ -213,7 +258,8 @@ pub fn development_problems(host: Host, pin: Pin) -> Result<(Problems, usize), S
         read += target_read;
         if target_read == 0 {
             problems.push(format!(
-                "`make {target}` on {} produced no readable development Cargo commands",
+                "`make {}` on {} produced no readable development Cargo commands",
+                target.as_str(),
                 host.make_value()
             ));
         }
@@ -228,10 +274,11 @@ pub fn development_problems(host: Host, pin: Pin) -> Result<(Problems, usize), S
 
 /// Returns every complaint about one held-out command: it assigns nothing, so
 /// it takes the configuration's flags, or the assignment names a standard flag.
-fn held_out_command_problems(target: &str, assignment: &Assignment) -> Problems {
+fn held_out_command_problems(target: MakeTarget, assignment: &Assignment) -> Problems {
     let Assignment::Flags(flags, _) = assignment else {
         return vec![format!(
-            "`make {target}` runs a command that takes the configuration's flags"
+            "`make {}` runs a command that takes the configuration's flags",
+            target.as_str()
         )];
     };
     let named = [
@@ -241,7 +288,7 @@ fn held_out_command_problems(target: &str, assignment: &Assignment) -> Problems 
     named
         .into_iter()
         .filter(|(is_named, _)| *is_named)
-        .map(|(_, flag)| format!("`make {target}` takes {flag}"))
+        .map(|(_, flag)| format!("`make {}` takes {flag}", target.as_str()))
         .collect()
 }
 
@@ -255,11 +302,12 @@ fn held_out_command_problems(target: &str, assignment: &Assignment) -> Problems 
 pub fn held_out_problems() -> Result<(Problems, usize), String> {
     let mut problems = Vec::new();
     let mut read = 0;
-    for target in HELD_OUT_TARGETS {
+    for &target in HELD_OUT_TARGETS {
         let commands = make_commands(target, Host::Linux)?;
         if commands.is_empty() {
             problems.push(format!(
-                "`make {target}` produced no held-out Cargo commands"
+                "`make {}` produced no held-out Cargo commands",
+                target.as_str()
             ));
         }
         read += commands.len();

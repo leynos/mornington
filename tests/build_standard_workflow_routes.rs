@@ -19,6 +19,12 @@ fn route_problems(workflows: &[(&str, &str)]) -> Vec<String> {
     suite_provisioning_problems(workflows)
 }
 
+/// Checks one local reusable caller together with its supplied child workflow.
+fn local_reusable_route_problems(child: &str) -> Vec<String> {
+    let caller = "jobs:\n  caller:\n    uses: ./.github/workflows/child.yml\n";
+    route_problems(&[("caller.yml", caller), ("child.yml", child)])
+}
+
 /// Scalar, inline-list, mapping, and matrix runners all expose a Linux suite
 /// and must see the shared installer before it.
 #[rstest]
@@ -97,12 +103,11 @@ fn conflicting_runner_labels_fail_closed(#[case] runner: &str) {
 /// A local reusable caller remains reachable through its checked-in child.
 #[test]
 fn local_reusable_workflows_are_followed() {
-    let caller = "jobs:\n  caller:\n    uses: ./.github/workflows/child.yml\n";
     let child = format!(
         "on: workflow_call\njobs:\n  child-suite:\n    runs-on: ubuntu-latest\n    \
          steps:\n{SHARED_SETUP}      - run: cargo test --all-features\n"
     );
-    let problems = route_problems(&[("caller.yml", caller), ("child.yml", &child)]);
+    let problems = local_reusable_route_problems(&child);
     assert!(
         problems.is_empty(),
         "the local reusable suite must be checked through its child: {problems:#?}"
@@ -113,7 +118,6 @@ fn local_reusable_workflows_are_followed() {
 /// discovered as corpus entrypoints.
 #[test]
 fn local_reusable_workflow_failures_are_reported_once() {
-    let caller = "jobs:\n  caller:\n    uses: ./.github/workflows/child.yml\n";
     let child = concat!(
         "on: workflow_call\n",
         "jobs:\n",
@@ -122,7 +126,7 @@ fn local_reusable_workflow_failures_are_reported_once() {
         "    steps:\n",
         "      - run: cargo test --all-features\n"
     );
-    let problems = route_problems(&[("caller.yml", caller), ("child.yml", child)]);
+    let problems = local_reusable_route_problems(child);
     assert_eq!(
         problems.len(),
         1,
