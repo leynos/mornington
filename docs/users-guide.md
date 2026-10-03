@@ -123,7 +123,9 @@ The generated `Makefile` exposes these public targets:
   `git ls-files`, so the project must be a Git repository in which Git already
   tracks some files; `make spelling` fails with that instruction when
   `git ls-files` lists nothing, and checks only the files Git tracks. The first
-  run writes the ignored `typos.toml` in the working tree.
+  run writes the ignored `typos.toml` in the working tree. The builder requires
+  Python 3.14 or newer, so the target runs it with `--python 3.14` and `uv`
+  fetches that interpreter when the host lacks one.
 - `make nixie` validates Mermaid diagrams.
 
 Install `clang`, `lld`, `mold`, `python3`, `uv`, and `cargo-audit` before
