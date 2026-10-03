@@ -35,8 +35,8 @@ COVERAGE_LINKER_FLAGS ?= -fuse-ld=lld
 COVERAGE_RUST_FLAGS ?= $(RUST_FLAGS) $(POLONIUS_FLAGS) -C link-arg=$(COVERAGE_LINKER_FLAGS)
 MDLINT ?= markdownlint-cli2
 NIXIE ?= nixie
-TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.1
-TYPOS_CONFIG_BUILDER = uv tool run --from \
+TYPOS_CONFIG_BUILDER_VERSION ?= v0.1.3
+TYPOS_CONFIG_BUILDER = uv tool run --python 3.14 --from \
 	"git+https://github.com/leynos/typos-config-builder.git@$(TYPOS_CONFIG_BUILDER_VERSION)" \
 	typos-config-builder
 WHITAKER ?= $(or $(shell command -v whitaker 2>/dev/null),$(wildcard $(USER_WHITAKER)),whitaker)
