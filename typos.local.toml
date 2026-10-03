@@ -1,20 +1,28 @@
-# Repository-specific identifiers, quotations and deliberate fixtures.
+# Exact external tool and compiler-analysis names used by Mornington.
 
 schema = 1
 
 [oxford]
 stems = []
 
-[words]
-accepted = ["mold", "Polonius"]
-
-[words.corrections]
-
 [patterns]
 ignore = [
-  # Inline code spans were masked by the previous dictionary snapshot; kept
-  # until the shared dictionary rules on it.
-  '`[^`\n]+`',
+  # Linker flags, action inputs, commands, and pinned-tool paths.
+  '(?:-fuse-ld=|install-|command -v |tools/)\bmold\b',
+  # Pinned release archives, versions, and release URLs.
+  '\bmold(?:-(?:[0-9]|%s)|/[A-Za-z0-9_]| --version| \$\{| [0-9])',
+  # Literal tool names in commands, configuration, and assertions.
+  '["`]\bmold\b["`]',
+  # Clear technical roles for the external linker.
+  '\bmold (?:linkers?|binary|release|archive|installer|contract|routing|version)\b',
+  '\b(?:checksum-verified|pinned|approved|configured) mold (?:binary|release|version|archive|installer)\b',
+  # Technical prose that has no shorter, unambiguous marker.
+  '\b(?:Linux mold (?:routing|linker)|mold ships for Linux|mold is required for the configured Linux linker|mold through setup-rust|mold on the outer Linux runner|mold so Linux jobs|mold from apt|mold in a Linux-wide cfg table|mold beyond Linux|the exact mold version|scopes mold to one Linux target triple|toolchain, components, clang, and mold|clang lld mold)\b',
+  '\b(?:installs mold through|setup-rust step must install mold|setup-rust\x27s pinned mold|mold alone, in the Linux-wide cfg table|Linux table lost mold|names mold in `\[build\]`|(?:curl|sha256sum|tar) is required to (?:download|verify|install) mold|mold \$\{expected\} is required|mold \$\{version\} has no approved archive|host takes mold, which ships|nightly pin, and mold on Linux|gets mold wrong|setup-rust installs pinned mold)\b',
+  '└── mold/',
+  'names mold in `\[build\]`',
+  '\bCARGO_TERM_COLOR\b',
+  '\bPolonius\b',
 ]
 
 [files]

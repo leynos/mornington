@@ -27,7 +27,11 @@ fn make_conditional_body<'makefile>(makefile: &'makefile str, condition: &str) -
     body
 }
 
-/// The outer Cargo test process links binaries before any nested Act execution.
+fn contains_trimmed_line(section: &str, expected: &str) -> bool {
+    section.lines().map(str::trim).any(|line| line == expected)
+}
+
+/// The outer Cargo test process installs clang before any nested Act execution.
 #[test]
 fn act_validation_installs_the_configured_linker_before_tests() {
     let workflow = include_str!("../.github/workflows/act-validation.yml");
@@ -47,10 +51,11 @@ fn act_validation_installs_the_configured_linker_before_tests() {
         "the executable apt-get install command must install clang: {install_command}"
     );
     assert!(
-        install_command
+        !install_command
             .split_whitespace()
             .any(|word| word == "mold"),
-        "the executable apt-get install command must install mold: {install_command}"
+        "Act validation must rely on setup-rust's pinned mold rather than an apt package: \
+         {install_command}"
     );
     assert!(
         linker_step_offset < test_step_offset,
@@ -64,47 +69,58 @@ fn act_validation_verifies_linkers_before_running_tests() {
     let workflow = include_str!("../.github/workflows/act-validation.yml");
     let (linker_verification_step, linker_verification_step_offset) =
         workflow_step(workflow, "Verify Linux linker prerequisites");
+    let (preflight_step, preflight_step_offset) =
+        workflow_step(workflow, "Check build prerequisites");
     let (_, act_installation_step_offset) = workflow_step(workflow, "Install act");
     let (test_step, test_step_offset) = workflow_step(workflow, "Run tests with act validation");
 
-    assert!(
-        workflow
-            .lines()
-            .map(str::trim)
-            .any(|line| line == "ACT_VERSION: v0.2.81"),
-        "Act validation must install the release that supports Node 24 actions"
-    );
-    assert!(
-        linker_verification_step
-            .lines()
-            .map(str::trim)
-            .any(|line| line == "clang --version"),
-        "Act validation must invoke clang on the outer Linux runner"
-    );
-    assert!(
-        linker_verification_step
-            .lines()
-            .map(str::trim)
-            .any(|line| line == "mold --version"),
-        "Act validation must invoke mold on the outer Linux runner"
-    );
-    assert!(
-        test_step
-            .lines()
-            .map(str::trim)
-            .any(|line| line == "GITHUB_TOKEN: ${{ github.token }}"),
-        "Act validation must pass GitHub's job token into the nested workflow"
-    );
-    assert!(
-        test_step
-            .lines()
-            .map(str::trim)
-            .any(|line| line == "run: make test WITH_ACT=1"),
-        "Act validation must run Cargo's Act-enabled test path after linker verification"
-    );
+    for (section, expected, diagnostic) in [
+        (
+            workflow,
+            "ACT_VERSION: v0.2.81",
+            "Act validation must install the release that supports Node 24 actions",
+        ),
+        (
+            linker_verification_step,
+            "clang --version",
+            "Act validation must invoke clang on the outer Linux runner",
+        ),
+        (
+            linker_verification_step,
+            "mold --version",
+            "Act validation must invoke mold on the outer Linux runner",
+        ),
+        (
+            preflight_step,
+            "run: make check-build-tools",
+            "Act validation must verify the pinned toolchain and linkers before tests",
+        ),
+        (
+            test_step,
+            "GITHUB_TOKEN: '${{ github.token }}'",
+            "Act validation must pass GitHub's job token into the nested workflow",
+        ),
+        (
+            test_step,
+            "run: make test WITH_ACT=1",
+            "Act validation must run Cargo's Act-enabled test path after linker verification",
+        ),
+    ] {
+        assert!(contains_trimmed_line(section, expected), "{diagnostic}");
+    }
     assert!(
         linker_verification_step_offset < test_step_offset,
         "the outer runner must verify linkers before it runs the Act-enabled Cargo tests"
+    );
+    assert!(
+        [
+            linker_verification_step_offset,
+            preflight_step_offset,
+            test_step_offset,
+        ]
+        .windows(2)
+        .all(|offsets| matches!(offsets, [earlier, later] if earlier < later)),
+        "the build preflight must follow linker probes and precede the Act-enabled Cargo tests"
     );
     assert!(
         act_installation_step_offset < test_step_offset,
@@ -131,7 +147,7 @@ fn act_enabled_tests_execute_the_ci_workflow() {
         ci_workflow
             .lines()
             .map(str::trim)
-            .any(|line| line == "use-sccache: ${{ env.ACT != 'true' }}"),
+            .any(|line| line == "use-sccache: \"${{ env.ACT != 'true' }}\""),
         "the nested Act run must disable sccache while regular CI retains it"
     );
     assert!(
@@ -140,10 +156,11 @@ fn act_enabled_tests_execute_the_ci_workflow() {
         "the nested Act run must execute the CI test target without coverage artefact upload"
     );
     assert!(
-        ci_workflow.contains(
-            "- name: Test and Measure Coverage\n        if: github.event_name == 'pull_request' \
-             && env.ACT != 'true'\n        uses: leynos/shared-actions"
-        ),
+        ci_workflow.contains(concat!(
+            "- name: Test and Measure Coverage\n",
+            "        if: github.event_name == 'pull_request' && env.ACT != 'true'\n",
+            "        uses: leynos/shared-actions/.github/actions/generate-coverage@"
+        )),
         "regular CI must retain its coverage measurement workflow"
     );
 }

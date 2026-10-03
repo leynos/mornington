@@ -1,12 +1,9 @@
 //! `Mornington` application entry point.
 
-// TODO: Remove when replacing app scaffolding
-// (docs/execplans/rust-project-enhancements.md).
 /// Application entry point.
-#[expect(
-    clippy::print_stdout,
-    reason = "temporary app stub tracked in docs/execplans/rust-project-enhancements.md"
-)]
-fn main() {
-    println!("Hello from Mornington!");
+fn main() -> std::io::Result<()> {
+    use std::io::Write;
+
+    let mut stdout = std::io::stdout().lock();
+    writeln!(stdout, "Hello from Mornington!")
 }

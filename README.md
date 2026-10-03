@@ -33,11 +33,12 @@ ______________________________________________________________________
 and draft specifications. The forum, web interface, and hosting stack are not
 implemented yet.
 
-With Rustup, Git, `clang`, and `mold` installed, check out the repository:
+With Rustup, Git, and `clang` installed, check out the repository:
 
 ```bash
 git clone https://github.com/leynos/mornington.git
 cd mornington
+make install-build-tools
 cargo run
 ```
 

@@ -19,23 +19,24 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@8a83824b29dfe8f861714b544dc85fb925ed010c
         with:
-          expect-cache: any
+          install-mold: 'true'
           rustflags: -Zpolonius=next
-          use-sccache: ${{ env.ACT != 'true' }}
+          use-sccache: "${{ env.ACT != 'true' }}"
       - name: Log Rust compiler configuration
         run: |-
           rustc --version
           printf 'Base RUSTFLAGS: %s\n' "$RUSTFLAGS"
-      - name: Install mold linker
+      - name: Install clang and lld
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          # mold accelerates dev builds; coverage uses lld for llvm-tools compatibility.
+          # setup-rust provides the configured linker (install-mold above); coverage uses lld
+          # compatibility.
           sudo apt-get update \
-            && sudo apt-get install --yes --no-install-recommends clang lld mold
+            && sudo apt-get install --yes --no-install-recommends clang lld
       - name: Install mdtablefix
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
@@ -43,14 +44,16 @@ jobs:
           leynos/shared-actions/.github/actions/install-mdtablefix@4fb8eb7ad52454678a0662865d81d3cd17aa6e0e
         with:
           version: '0.6.0'
+      - name: Check build prerequisites
+        run: make check-build-tools
+      - name: Setup uv
+        uses: astral-sh/setup-uv@12d13f90bc3a5a1971bebad4beb09a4dfa962e91
       - name: Format
         run: make check-fmt
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@2df9e28eb87988518ef3880c34edad45d65b1668
         with:
           globs: '**/*.md'
-      - name: Setup uv
-        uses: astral-sh/setup-uv@12d13f90bc3a5a1971bebad4beb09a4dfa962e91
       - name: Check the CV-005 contracts
         run: make test-workflow-contracts
       - name: Check spelling
@@ -72,20 +75,23 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
-          python-version: '3.x'
+          python-version: '3.14'
       - name: Install Whitaker
         uses: leynos/shared-actions/.github/actions/install-whitaker@6dea5677a84fec60ca51b07202570e3af12ffdb4
         with:
-          cranelift: true
+          cranelift: 'true'
       - name: Audit dependencies
         if: github.actor != 'dependabot[bot]'
         run: make audit
       - name: Lint
         run: make lint
+      - name: Typecheck
+        run: make typecheck
       - name: Log coverage linker configuration
         if: env.ACT != 'true'
         run: |
           echo "Coverage linker: clang"
+          echo "Coverage codegen backend: llvm"
           echo "Coverage RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld"
           echo "Coverage CFLAGS: -fuse-ld=lld"
           echo "Coverage LDFLAGS: -fuse-ld=lld"
@@ -94,13 +100,19 @@ jobs:
         run: make test
       - name: Test and Measure Coverage
         if: github.event_name == 'pull_request' && env.ACT != 'true'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@dbe2e22ceaf498d85512679ccded38be9dbe7777
+        uses: leynos/shared-actions/.github/actions/generate-coverage@d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
+          CARGO_PROFILE_DEV_CODEGEN_BACKEND: llvm
           RUSTFLAGS: -Zpolonius=next -C link-arg=-fuse-ld=lld
           CFLAGS: -fuse-ld=lld
           LDFLAGS: -fuse-ld=lld
         with:
+          language: rust
+          cargo-manifest: Cargo.toml
+          all-targets: 'true'
+          all-features: 'true'
+          doctests: 'true'
           output-path: lcov.info
           format: lcov
           with-ratchet: 'true'
