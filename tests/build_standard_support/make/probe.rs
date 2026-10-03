@@ -230,12 +230,15 @@ pub fn test_commands_preserve_caller_rustflags() -> Result<(), String> {
 
 /// Executes the test target with the recording Cargo stub.
 fn run_recording_make_test(probe: &ProbeCargo, caller_flags: &str) -> Result<(), String> {
+    // The outer suite runs Python contracts separately; this probe owns only
+    // the two Cargo routes whose flags it records.
     let output = Command::new("make")
         .args([
             "--always-make",
             "test",
             "CARGO=probe-cargo",
             "CHECK_BUILD_TOOLS=probe-cargo",
+            "PYTHON=true",
             "BUILD_HOST_OS=Linux",
         ])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
