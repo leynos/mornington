@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
         with:
           persist-credentials: false
-      - uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+      - uses: leynos/shared-actions/.github/actions/setup-rust@c17d433f99daa94e53ca5eb566088518a312cb71
         with:
           expect-cache: any
           toolchain: nightly-2026-08-27
