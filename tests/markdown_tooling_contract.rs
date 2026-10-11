@@ -31,7 +31,9 @@ struct Examples<'a>(&'a [String]);
 /// Whether examples must match or remain visible to the spelling checker.
 #[derive(Clone, Copy)]
 enum MatchExpectation {
+    /// The example must match at least one configured spelling pattern.
     Required,
+    /// The example must remain visible to the spelling checker.
     Rejected,
 }
 
@@ -80,6 +82,7 @@ fn spelling_uses_the_selected_builder_without_an_inline_code_exemption() -> Resu
     Ok(())
 }
 
+/// Checks the pinned builder version and its single all-scope gate invocation.
 fn assert_spelling_builder_gate() {
     assert!(
         MAKEFILE.contains("TYPOS_CONFIG_BUILDER_VERSION = v0.1.3"),
@@ -96,6 +99,7 @@ fn assert_spelling_builder_gate() {
     );
 }
 
+/// Keeps linker exceptions limited to external-tool contexts and known names.
 fn assert_bounded_spelling_overlay() -> Result<(), String> {
     let linker_name = ["mo", "ld"].concat();
     let patterns = local_ignore_patterns()?;
@@ -149,11 +153,13 @@ fn require_patterns<'a>(
     Ok(())
 }
 
+/// Reads quoted regular expressions from the local spelling overlay.
 fn local_ignore_patterns() -> Result<Vec<String>, String> {
     pattern_entries(Text(TYPOS_LOCAL), Text("[patterns]\nignore = ["), '\'')
         .map(|patterns| patterns.into_iter().map(str::to_owned).collect())
 }
 
+/// Reads and unescapes regular expressions from generated spelling config.
 fn generated_ignore_patterns() -> Result<Vec<String>, String> {
     pattern_entries(Text(TYPOS_GENERATED), Text("extend-ignore-re = ["), '"')?
         .into_iter()
@@ -161,6 +167,7 @@ fn generated_ignore_patterns() -> Result<Vec<String>, String> {
         .collect()
 }
 
+/// Reads a quoted string array following a configuration header.
 fn pattern_entries(
     config: Text<'static>,
     header: Text<'_>,
@@ -196,6 +203,7 @@ fn pattern_entries(
     Ok(patterns)
 }
 
+/// Decodes supported TOML string escapes in a generated regular expression.
 fn unescape_generated_pattern(pattern: Text<'_>) -> Result<String, String> {
     let mut escaped = false;
     let mut unescaped = String::new();
@@ -227,6 +235,7 @@ fn unescape_generated_pattern(pattern: Text<'_>) -> Result<String, String> {
     Ok(unescaped)
 }
 
+/// Checks that generated spelling rules include the local overlay patterns.
 fn assert_generated_spelling_config_is_not_stale() -> Result<(), String> {
     let linker_name = ["mo", "ld"].concat();
     let local_patterns = local_ignore_patterns()?;
@@ -260,6 +269,7 @@ fn assert_linker_context_examples(
         format!("{name} on Linux"),
         format!("{name} on the wall"),
         format!("install {name} on the furniture"),
+        format!("`The {name} is unwelcome.`"),
     ];
     assert_example_matches(
         patterns,
@@ -299,6 +309,7 @@ impl MatchExpectation {
     }
 }
 
+/// Reports whether any configured regular expression matches the supplied text.
 fn matches_any_pattern(patterns: Patterns<'_>, value: Text<'_>) -> Result<bool, String> {
     for pattern in patterns.0 {
         let regex = Regex::new(pattern).map_err(|error| {
@@ -311,6 +322,7 @@ fn matches_any_pattern(patterns: Patterns<'_>, value: Text<'_>) -> Result<bool, 
     Ok(false)
 }
 
+/// Keeps shared dictionary caches ignored while leaving generated config tracked.
 fn assert_spelling_cache_rules() {
     for cache_file in [".typos-oxendict-base.json", ".typos-oxendict-base.toml"] {
         assert!(

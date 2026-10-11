@@ -58,6 +58,7 @@ extend-ignore-re = [
     "`var\\.iamge_id` instead of `var\\.image_id`",
     "currentColor",
     "names mold in `\\[build\\]`",
+    "printf \\x27mold %s",
     "└── mold/",
 ]
 

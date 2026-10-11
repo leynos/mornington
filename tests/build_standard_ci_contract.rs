@@ -109,42 +109,33 @@ const WHITAKER_WITH_UNAPPROVED_ACTION: &str = concat!(
     "        with:\n          suite-version: rolling\n"
 );
 
-/// Scenario: coverage action steps with and without an explicit LLVM backend.
-///
-/// Invariant: coverage selects LLVM itself, because the development profile
-/// otherwise selects Cranelift for ordinary builds.
+/// Both coverage readers enforce their own explicit settings on every fixture.
 #[rstest]
-#[case::llvm_backend(COVERAGE_WITH_LLVM, 0)]
-#[case::missing_backend(COVERAGE_WITHOUT_LLVM, 1)]
-#[case::live_ci(CI_WORKFLOW, 0)]
-fn coverage_steps_select_the_llvm_backend(#[case] workflow: &str, #[case] expected: usize) {
-    let found = Workflow::new("fixture.yml", workflow)
-        .coverage_backend_problems()
-        .len();
-    assert_eq!(
-        found, expected,
-        "coverage backend reader found {found} complaints, not {expected}"
-    );
-}
-
-/// Coverage must assign its own neutral `RUSTFLAGS`, rather than inheriting a
-/// development frontend or linker setting from another route.
-#[rstest]
-#[case::neutral(COVERAGE_WITH_NEUTRAL_RUSTFLAGS, 0)]
-#[case::unassigned(COVERAGE_WITHOUT_RUSTFLAGS, 1)]
-#[case::sibling_assignment(COVERAGE_WITH_SIBLING_RUSTFLAGS, 1)]
-#[case::frontend(COVERAGE_WITH_THREADS, 1)]
-#[case::linker(COVERAGE_WITH_LINKER, 1)]
-fn coverage_steps_keep_rustflags_out_of_the_development_standard(
+#[case::llvm_backend(COVERAGE_WITH_LLVM, 0, 1)]
+#[case::missing_backend(COVERAGE_WITHOUT_LLVM, 1, 0)]
+#[case::live_ci(CI_WORKFLOW, 0, 0)]
+#[case::neutral(COVERAGE_WITH_NEUTRAL_RUSTFLAGS, 1, 0)]
+#[case::unassigned(COVERAGE_WITHOUT_RUSTFLAGS, 1, 1)]
+#[case::sibling_assignment(COVERAGE_WITH_SIBLING_RUSTFLAGS, 1, 1)]
+#[case::frontend(COVERAGE_WITH_THREADS, 1, 1)]
+#[case::linker(COVERAGE_WITH_LINKER, 1, 1)]
+fn coverage_steps_require_explicit_backend_and_neutral_flags(
     #[case] workflow: &str,
-    #[case] expected: usize,
+    #[case] expected_backend: usize,
+    #[case] expected_flags: usize,
 ) {
-    let found = Workflow::new("fixture.yml", workflow)
-        .coverage_problems()
-        .len();
+    let reader = Workflow::new("fixture.yml", workflow);
+    let backend = reader.coverage_backend_problems();
+    let flags = reader.coverage_problems();
     assert_eq!(
-        found, expected,
-        "coverage RUSTFLAGS reader found {found} complaints, not {expected}"
+        backend.len(),
+        expected_backend,
+        "coverage backend complaints for {workflow:?}: {backend:#?}"
+    );
+    assert_eq!(
+        flags.len(),
+        expected_flags,
+        "coverage RUSTFLAGS complaints for {workflow:?}: {flags:#?}"
     );
 }
 

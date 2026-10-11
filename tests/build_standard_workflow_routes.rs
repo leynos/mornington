@@ -2,6 +2,8 @@
 
 #[path = "build_standard_support/ci_steps.rs"]
 mod ci_steps;
+#[path = "build_standard_support/workflow_routes/properties.rs"]
+mod properties;
 #[path = "build_standard_support/workflow_routes.rs"]
 mod workflow_routes;
 

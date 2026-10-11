@@ -18,8 +18,9 @@ Each gate selects its Markdown differently. `make check-fmt` runs
 and the untracked files Git does not ignore, so it needs a Git repository but
 not staged files. `make markdownlint` runs `markdownlint-cli2 '**/*.md'` over
 every matching file, staged or not, and then runs `make spelling`. The spelling
-gate enumerates its inputs with `git ls-files`, so it checks only files Git
-already tracks: stage new Markdown before relying on it.
+gate enumerates its inputs with `git ls-files` and uses `--scope all`, so it
+checks supported spelling scopes in files Git already tracks. Stage new files
+before relying on that check.
 
 ## Generated Tooling
 
@@ -111,13 +112,14 @@ doctest therefore fails the command.
 
 The generated `Makefile` exposes these public targets:
 
-- `make all` runs formatting checks, linting, tests, and spelling checks.
+- `make all` runs six gates in order: `check-fmt`, `lint`, `typecheck`, `test`,
+  `test-workflow-contracts`, and `spelling`.
 - `make check-fmt` verifies Rust and Python formatting and, with
   `mdtablefix --check --git --include-untracked`, Markdown formatting.
 - `make fmt` formats Rust, Python, and Markdown sources.
-- `make lint` builds documentation, runs Clippy and Whitaker, then runs Ruff,
-  Pylint with the df12 policy, ambrleaks, and Interrogate on repository-owned
-  Python. Every warning is denied.
+- `make lint` checks the build tools, builds documentation, runs Clippy and
+  Whitaker, then runs Ruff, Pylint with the df12 policy, ambrleaks, and
+  Interrogate on repository-owned Python. Every warning is denied.
 - `make typecheck` checks Rust and runs ty over repository-owned Python without
   building the application.
 - `make test` runs the Python workflow contracts, then runs
@@ -146,15 +148,16 @@ The generated `Makefile` exposes these public targets:
   spelling.
 - `make spelling` runs the shared `typos-config-builder` v0.1.3 gate. It
   regenerates `typos.toml` from the live shared dictionary and the
-  `typos.local.toml` overlay, then checks Markdown prose, so `typos.toml` is
-  never drift checked in CI. Commit its regenerated output with spelling-policy
-  changes, but never edit it by hand. Keep repository-specific exceptions in
-  the tracked `typos.local.toml` overlay. The gate enumerates its inputs with
-  `git ls-files`, so the project must be a Git repository in which Git already
-  tracks some files; `make spelling` fails with that instruction when
-  `git ls-files` lists nothing, and checks only the files Git tracks. The
-  builder requires Python 3.14 or newer, so the target runs it with
-  `--python 3.14` and `uv` fetches that interpreter when the host lacks one.
+  `typos.local.toml` overlay, then checks all supported spelling scopes in
+  files Git tracks, so `typos.toml` is never drift checked in CI. Commit its
+  regenerated output with spelling-policy changes, but never edit it by hand.
+  Keep repository-specific exceptions in the tracked `typos.local.toml`
+  overlay. The gate enumerates its inputs with `git ls-files`, so the project
+  must be a Git repository in which Git already tracks some files;
+  `make spelling` fails with that instruction when `git ls-files` lists
+  nothing, and checks only the files Git tracks. The builder requires Python
+  3.14 or newer, so the target runs it with `--python 3.14` and `uv` fetches
+  that interpreter when the host lacks one.
 - `make nixie` validates Mermaid diagrams.
 
 Install `clang`, `lld`, `uv`, and `cargo-audit`, then run

@@ -11,6 +11,8 @@ ignore = [
   '(?:-fuse-ld=|install-|command -v |tools/)\bmold\b',
   # Pinned release archives, versions, and release URLs.
   '\bmold(?:-(?:[0-9]|%s)|/[A-Za-z0-9_]| --version| \$\{| [0-9])',
+  # Exact version-output protocol in the hermetic linker shim.
+  'printf \x27mold %s',
   # Literal tool names in commands, configuration, and assertions.
   '["`]\bmold\b["`]',
   # Clear technical roles for the external linker.

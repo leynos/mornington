@@ -16,28 +16,29 @@ durable modes when implementing storage.
 
 ## Local Workflow
 
-Use `make all` as the public entrypoint for formatting, linting, and tests. It
-recurses through each cache-consuming gate in order, even under `make -j`.
-`make lint` runs rustdoc and Clippy, Whitaker, and the Python gateway in that
-order. The Python gateway runs Ruff, Pylint with all pinned `df12-python-lints`
-messages, ambrleaks, and Interrogate on every repository Python module under
-`.github`, `tests`, `scripts`, `benches`, and `benchmarks`. `make test` runs
-the Python workflow contracts before it prefers `cargo nextest run` and falls
-back to `cargo test` when cargo-nextest is not available. `make check-fmt`
-verifies Rust formatting with `cargo fmt --all -- --check` and Markdown
-formatting with `mdtablefix --check --git --include-untracked`, and checks
-Python formatting with Ruff. `make fmt` formats Rust and Python sources before
-formatting Markdown with `mdtablefix --in-place` followed by
-`markdownlint-cli2 --fix`. `make typecheck` runs ty on the same Python
-inventory and checks Rust without building via `cargo check`. Every Python tool
-uses managed CPython 3.14. `make audit` derives the Rust workspace root with
-`cargo metadata`, logs workspace member manifests, and runs `cargo audit` once
-from the workspace root. PR CI skips `make audit` and the audit-only setup when
-`github.actor` is `dependabot[bot]`; that keeps whole-lockfile advisories from
-blocking unrelated Dependabot PRs while human PRs retain the audit gate. The
-compensating control is `.github/workflows/audit.yml`, which runs weekly and
-can also be triggered manually. `make coverage` uses `cargo llvm-cov` with
-`lld`.
+Use `make all` as the public entrypoint for repository validation. It runs six
+gates in order, even under `make -j`: `check-fmt`, `lint`, `typecheck`, `test`,
+`test-workflow-contracts`, and `spelling`. `make lint` checks the build tools
+it needs, then runs rustdoc and Clippy, Whitaker, and the Python gateway in
+that order. The Python gateway runs Ruff, Pylint with the pinned
+`df12-python-lints` messages, ambrleaks, and Interrogate over every
+repository-owned Python module under `.github`, `tests`, `scripts`, `benches`,
+and `benchmarks`. `make test` runs the Python workflow contracts before it
+prefers `cargo nextest run` and falls back to `cargo test` when cargo-nextest
+is not available. `make check-fmt` verifies Rust formatting with
+`cargo fmt --all -- --check` and Markdown formatting with
+`mdtablefix --check --git --include-untracked`, and checks Python formatting
+with Ruff. `make fmt` formats Rust and Python sources before formatting
+Markdown with `mdtablefix --in-place` followed by `markdownlint-cli2 --fix`.
+`make typecheck` runs ty on the same Python inventory and checks Rust without
+building via `cargo check`. Every Python tool uses managed CPython 3.14.
+`make audit` derives the Rust workspace root with `cargo metadata`, logs
+workspace member manifests, and runs `cargo audit` once from the workspace
+root. PR CI skips `make audit` and the audit-only setup when `github.actor` is
+`dependabot[bot]`; that keeps whole-lockfile advisories from blocking unrelated
+Dependabot PRs while human PRs retain the audit gate. The compensating control
+is `.github/workflows/audit.yml`, which runs weekly and can also be triggered
+manually. `make coverage` uses `cargo llvm-cov` with `lld`.
 
 GitHub Actions Act validation lives in `.github/workflows/act-validation.yml`.
 The main `.github/workflows/ci.yml` workflow deliberately does not run
@@ -164,21 +165,24 @@ flags.
 
 On Linux, install `mold` before building: the configuration names it, so a
 build without it fails at link time. CI installs it through `setup-rust`'s
-`install-mold` input. `tests/build_standard_contract.rs` holds the standard. It
-reads the configuration sources, the commands `make -n` prints for each
-development target on a Linux host and a macOS host (each keeping the caller's
-own `RUSTFLAGS`) and for each coverage and release target on a Linux host, and
-the `setup-rust` steps of the CI workflows (each must pass `install-mold`), so
-a flag lost through a recipe or workflow edit fails there.
-`tests/build_standard_support/ci_steps.rs` owns its `Workflow` reader as
-test-only repository-CI YAML code; it is not an application or shared parsing
-API. `tests/build_standard_support/workflow_routes.rs` and its private runner
-sibling own only test-contract interpretation of GitHub Actions runner forms;
-they are not reusable workflow-parsing APIs. The private `MakeTarget` model in
-`tests/build_standard_support/make.rs` owns only evaluated Make routes, and the
-strict channel parser in `tests/build_standard_support/config/pin.rs` owns only
-the checked-in toolchain contract. Keep these test readers feature-local;
-compose their public contract queries rather than reusing their parsing
+`install-mold` input. The build-standard contracts divide responsibility by
+input. `tests/build_standard_contract.rs` checks the Cargo configuration and
+toolchain pin, using the strict channel parser in
+`tests/build_standard_support/config/pin.rs`. The Make contract in
+`tests/build_standard_make_contract.rs` checks the commands `make -n` prints
+for each development target on Linux and macOS, preserving caller `RUSTFLAGS`,
+and for coverage and release targets on Linux. Its development Cargo and
+Whitaker recipes append `DEV_RUST_FLAGS` to the caller value. The CI contract in
+`tests/build_standard_ci_contract.rs` checks each `setup-rust` step for
+`install-mold`; it also checks the coverage backend and strict Whitaker
+provisioning. The workflow-route contract in
+`tests/build_standard_workflow_routes.rs` checks discovered Linux test routes.
+`tests/build_standard_support/ci_steps.rs` owns the test-only repository-CI
+YAML reader, while `tests/build_standard_support/workflow_routes.rs` and its
+private runner sibling interpret GitHub Actions runner forms. The private
+`MakeTarget` model in `tests/build_standard_support/make.rs` reads evaluated
+Make routes. These are feature-local contract readers, not application or
+shared parsing APIs; compose their contract queries rather than reusing parsing
 internals in production code.
 
 ### Cranelift
@@ -204,12 +208,13 @@ requires Python 3.14 or newer, so the target passes `--python 3.14` and `uv`
 fetches that interpreter when the host lacks one.
 
 `typos.toml` is generated, tracked output. The gate regenerates it on every run
-from the live shared estate dictionary and the `typos.local.toml` overlay, so a
-word added to the shared dictionary needs no change here. Commit regenerated
-output with spelling-policy changes, but never hand-edit it. Because the
-dictionary is live, continuous integration must not drift-check `typos.toml`.
-Add narrow repository-specific identifier, API, proper-name, or fixture
-exceptions to `typos.local.toml`; hand edits are overwritten on the next run.
+from the live shared estate dictionary and the `typos.local.toml` overlay, then
+runs with `--scope all` over files Git tracks. A word added to the shared
+dictionary needs no change here. Commit regenerated output with spelling-policy
+changes, but never hand-edit it. Because the dictionary is live, continuous
+integration must not drift-check `typos.toml`. Add narrow repository-specific
+identifier, API, proper-name, or fixture exceptions to `typos.local.toml`; hand
+edits are overwritten on the next run.
 
 ### Security audit ignores
 
@@ -336,5 +341,18 @@ CI uses the strict Whitaker provisioner pinned at
 `6dea5677a84fec60ca51b07202570e3af12ffdb4`, as allowlisted by
 `whitaker-provisioning` 0.1.0. The action's current live descendant was
 inspected at `d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79`; it rejects suite
-overrides and uses no source fallback. Whitaker runs without the development
-`RUSTFLAGS` injection.
+overrides and uses no source fallback. The `make lint-whitaker` recipe
+preserves caller `RUSTFLAGS` and appends `DEV_RUST_FLAGS` for Whitaker's Cargo
+work.
+
+The subprocess fixtures in `tests/build_tools_support` belong only to the
+build-tool behavioural contracts: they copy the actual scripts, expose an
+explicit utility allowlist, and inject command shims into each child's isolated
+environment. Script and removable-tool enums constrain subprocess execution and
+prerequisite mutations; fixture reads and writes accept `Utf8Path` values. They
+perform no network downloads or host installations. Temporary directory
+allocation and cleanup use `tempfile` RAII, while fixture and Make probe file
+access remains capability based through `cap_std`. The bounded workflow
+properties exercise `suite_provisioning_problems` with generated label orders,
+provision positions, and reusable chains or cycles; those helpers must not
+become production parsers or a general subprocess framework.

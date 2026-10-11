@@ -156,9 +156,10 @@ cloned only on insertion, and error context is built lazily. See
   with and without `-Zpolonius=next` as described in `docs/polonius.md`.
 
 - On a fresh Linux checkout, run `make install-build-tools` and then
-  `make check-build-tools` before build, test, lint, or typecheck work. The
-  preflight installs the pinned toolchain and checksum-verified mold binary;
-  `fmt` and `check-fmt` do not require it.
+  `make check-build-tools` before build, test, or typecheck work. `make lint`
+  runs `make check-build-tools` as its own prerequisite. The install target
+  installs the pinned toolchain and checksum-verified mold binary; the check
+  target verifies them. `fmt` and `check-fmt` do not require these tools.
 - Run `make check-fmt`, `make lint`, `make typecheck`, and `make test` before
   committing. These targets wrap the following commands, so contributors
   understand the exact behaviour and policy enforced:
@@ -198,7 +199,7 @@ cloned only on insertion, and error context is built lazily. See
     `make lint-whitaker` executes:
 
     ```makefile
-    RUSTFLAGS="$(DEV_RUST_FLAGS)" whitaker --all -- --all-targets --all-features
+    RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" whitaker --all -- --all-targets --all-features
     ```
 
     building documentation before linting every Rust target with all features
@@ -414,7 +415,8 @@ cloned only on insertion, and error context is built lazily. See
 
 - `make spelling` runs the pinned `typos-config-builder gate`, which
   regenerates `typos.toml` from the shared en-GB-oxendict dictionary and
-  `typos.local.toml`, then checks spelling and the shared phrase corrections.
+  `typos.local.toml`, then checks all supported spelling scopes and shared
+  phrase corrections in files Git tracks. The command uses `--scope all`.
 - `typos.toml` is generated: never edit it by hand. Put narrow
   repository-specific exceptions in `typos.local.toml`, as exact or full-line
   patterns rather than bare accepted words.

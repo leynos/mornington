@@ -1,10 +1,6 @@
 //! Harmless Cargo probes for contracts that evaluate Make's test recipes.
 
-use std::{
-    ffi::OsString,
-    process::Command,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{ffi::OsString, process::Command};
 
 use cap_std::{
     ambient_authority,
@@ -17,7 +13,7 @@ use super::make::{Assignment, commands_from};
 /// nextest branch while `--dry-run` keeps all actual Cargo invocations inert.
 struct ProbeCargo {
     temporary_directory: Dir,
-    directory_name: Utf8PathBuf,
+    _temporary_directory_owner: tempfile::TempDir,
     directory_path: Utf8PathBuf,
     record_path: Utf8PathBuf,
 }
@@ -25,21 +21,16 @@ struct ProbeCargo {
 impl ProbeCargo {
     /// Creates the harmless executable used by evaluated-Make contracts.
     fn new() -> Result<Self, String> {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|error| format!("reading clock for probe-cargo: {error}"))?
-            .as_nanos();
-        let temporary_path = Utf8PathBuf::from_path_buf(std::env::temp_dir())
-            .map_err(|path| format!("temporary directory {} is not UTF-8", path.display()))?;
-        let temporary_directory = Dir::open_ambient_dir(&temporary_path, ambient_authority())
-            .map_err(|error| format!("opening {temporary_path}: {error}"))?;
-        let directory_name = Utf8PathBuf::from(format!("mornington-probe-cargo-{nonce}"));
-        let directory_path = temporary_path.join(&directory_name);
+        let owner = tempfile::Builder::new()
+            .prefix("mornington-probe-cargo-")
+            .tempdir()
+            .map_err(|error| format!("allocating probe-cargo directory: {error}"))?;
+        let directory_path = Utf8PathBuf::from_path_buf(owner.path().to_path_buf())
+            .map_err(|path| format!("probe directory {} is not UTF-8", path.display()))?;
+        let temporary_directory = Dir::open_ambient_dir(&directory_path, ambient_authority())
+            .map_err(|error| format!("opening {directory_path}: {error}"))?;
         let record_path = directory_path.join("cargo-calls.log");
-        temporary_directory
-            .create_dir(&directory_name)
-            .map_err(|error| format!("creating {directory_path}: {error}"))?;
-        let executable = directory_name.join("probe-cargo");
+        let executable = Utf8PathBuf::from("probe-cargo");
         let executable_path = directory_path.join("probe-cargo");
         temporary_directory
             .write(
@@ -62,7 +53,7 @@ impl ProbeCargo {
         }
         Ok(Self {
             temporary_directory,
-            directory_name,
+            _temporary_directory_owner: owner,
             directory_path,
             record_path,
         })
@@ -93,25 +84,8 @@ impl ProbeCargo {
     /// Reads the calls recorded by the fake Cargo executable.
     fn recorded_calls(&self) -> Result<String, String> {
         self.temporary_directory
-            .read_to_string(self.directory_name.join("cargo-calls.log"))
+            .read_to_string("cargo-calls.log")
             .map_err(|error| format!("reading {}: {error}", self.record_path))
-    }
-}
-
-impl Drop for ProbeCargo {
-    fn drop(&mut self) {
-        match self
-            .temporary_directory
-            .remove_dir_all(&self.directory_name)
-        {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) if std::thread::panicking() => drop(error),
-            Err(error) => panic!(
-                "removing temporary probe directory {} failed: {error}",
-                self.directory_path
-            ),
-        }
     }
 }
 
