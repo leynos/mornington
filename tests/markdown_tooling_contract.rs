@@ -251,6 +251,7 @@ fn assert_generated_spelling_config_is_not_stale() -> Result<(), String> {
     assert_linker_context_examples(Text(&linker_name), Patterns(&generated_patterns))
 }
 
+/// Checks that linker contexts match while ordinary prose remains detectable.
 fn assert_linker_context_examples(
     linker_name: Text<'_>,
     patterns: Patterns<'_>,

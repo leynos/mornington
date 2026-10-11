@@ -96,6 +96,8 @@ enum UnusablePrerequisite {
     Component,
     /// The executable exists but reports a different linker release.
     LinkerVersion,
+    /// Linux cannot locate the project-pinned linker executable.
+    MissingPinnedLinker,
     /// Coverage lacks its additional LLVM linker.
     CoverageLinker,
 }
@@ -104,6 +106,7 @@ enum UnusablePrerequisite {
 #[rstest]
 #[case::components(UnusablePrerequisite::Component)]
 #[case::linker(UnusablePrerequisite::LinkerVersion)]
+#[case::missing_linker(UnusablePrerequisite::MissingPinnedLinker)]
 #[case::coverage(UnusablePrerequisite::CoverageLinker)]
 fn checker_fails_unusable_prerequisites(
     scripts: Result<ScriptFixture, String>,
@@ -121,6 +124,10 @@ fn checker_fails_unusable_prerequisites(
             &[("LINKER_VERSION", "0.0.0")],
             "mold 2.41.0 is required",
         ),
+        UnusablePrerequisite::MissingPinnedLinker => {
+            fixture.remove_tool(ToolName::PinnedLinker)?;
+            (&[], &[], "mold is required for the configured Linux linker")
+        }
         UnusablePrerequisite::CoverageLinker => {
             fixture.remove_tool(ToolName::Lld)?;
             (&["--coverage"], &[], "ld.lld is required")
@@ -193,6 +200,96 @@ fn non_linux_routes_do_not_require_linux_linkers(
     if calls.contains("curl ") || calls.contains("tar ") {
         return Err(format!(
             "non-Linux route must not download or extract the pinned linker: {calls}"
+        ));
+    }
+    Ok(())
+}
+
+/// An installation refusal at the architecture or download boundary.
+#[derive(Clone, Copy)]
+enum InstallerFailure {
+    /// The controlled download command reports a failed transfer.
+    Download,
+    /// No approved archive exists for the supplied Linux architecture.
+    Architecture,
+}
+
+/// Installer boundary crossed by one recorded external command.
+#[derive(Debug, PartialEq, Eq)]
+enum InstallerStage {
+    /// The installer attempted the archive transfer.
+    Download,
+    /// The installer attempted archive extraction into the prefix.
+    Extraction,
+}
+
+/// Observable result of a refused install, including its downstream side effects.
+#[derive(Debug, PartialEq, Eq)]
+struct RefusedInstallation {
+    /// A refusal must not report successful completion.
+    succeeded: bool,
+    /// The expected failure reason must be present in stderr.
+    diagnosed: bool,
+    /// Ordered download and extraction commands reached before refusal.
+    stages: Vec<InstallerStage>,
+    /// Neither failure mode may create an installed linker artefact.
+    installed: bool,
+}
+
+/// Installer failures cannot continue to extract or install an archive.
+#[rstest]
+#[case::download(InstallerFailure::Download)]
+#[case::unsupported_architecture(InstallerFailure::Architecture)]
+fn installer_failures_stop_before_extraction(
+    scripts: Result<ScriptFixture, String>,
+    #[case] failure: InstallerFailure,
+) -> Result<(), String> {
+    let fixture = scripts?;
+    let (overrides, diagnostic, stages): (&[(&str, &str)], &str, Vec<InstallerStage>) =
+        match failure {
+            InstallerFailure::Download => (
+                &[("FAIL_DOWNLOAD", "1")],
+                "fixture download refused",
+                vec![InstallerStage::Download],
+            ),
+            InstallerFailure::Architecture => (
+                &[("HOST_ARCH", "riscv64")],
+                "no approved archive for Linux architecture riscv64",
+                Vec::new(),
+            ),
+        };
+    let output = fixture.run(ScriptName::Install, &[], overrides)?;
+    let calls = fixture.read(Utf8Path::new("commands.log"))?;
+    let artefact = fixture.read(Utf8Path::new("prefix/bin/mold"));
+    let observed = RefusedInstallation {
+        succeeded: output.status.success(),
+        diagnosed: String::from_utf8_lossy(&output.stderr).contains(diagnostic),
+        stages: calls
+            .lines()
+            .filter_map(|line| {
+                line.strip_prefix("curl ")
+                    .map(|_| InstallerStage::Download)
+                    .or_else(|| {
+                        line.strip_prefix("tar ")
+                            .map(|_| InstallerStage::Extraction)
+                    })
+            })
+            .collect(),
+        installed: artefact.is_ok(),
+    };
+    let expected = RefusedInstallation {
+        succeeded: false,
+        diagnosed: true,
+        stages,
+        installed: false,
+    };
+    if observed != expected {
+        return Err(format!(
+            concat!(
+                "installer refusal must produce {:?}, found {:?}; required diagnostic {:?}; ",
+                "output {:?}; calls {}; artefact {:?}"
+            ),
+            expected, observed, diagnostic, output, calls, artefact
         ));
     }
     Ok(())
