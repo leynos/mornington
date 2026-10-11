@@ -45,7 +45,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
+        uses: leynos/shared-actions/.github/actions/setup-rust@2ddf19b3fd52c0f1089db0d57b015f859b80ab67
         with:
           install-mold: 'true'
           expect-cache: any
@@ -74,7 +74,7 @@ jobs:
           echo "Coverage CFLAGS: -fuse-ld=lld"
           echo "Coverage LDFLAGS: -fuse-ld=lld"
       - name: Test and Measure Coverage
-        uses: leynos/shared-actions/.github/actions/generate-coverage@d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79
+        uses: leynos/shared-actions/.github/actions/generate-coverage@2ddf19b3fd52c0f1089db0d57b015f859b80ab67
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
           CARGO_PROFILE_DEV_CODEGEN_BACKEND: llvm
@@ -106,7 +106,7 @@ jobs:
       # does not check the ref itself.
       - name: Upload coverage data to CodeScene
         if: steps.codescene-token.outputs.available == 'true' && github.ref == 'refs/heads/main'
-        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79
+        uses: leynos/shared-actions/.github/actions/upload-codescene-coverage@2ddf19b3fd52c0f1089db0d57b015f859b80ab67
         # No checksum input: the uploader pins cs-coverage through its own
         # manifest and rejects a non-empty `installer-checksum`.
         with:

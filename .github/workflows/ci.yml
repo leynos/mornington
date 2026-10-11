@@ -19,7 +19,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup Rust
-        uses: leynos/shared-actions/.github/actions/setup-rust@8a83824b29dfe8f861714b544dc85fb925ed010c
+        uses: leynos/shared-actions/.github/actions/setup-rust@2ddf19b3fd52c0f1089db0d57b015f859b80ab67
         with:
           install-mold: 'true'
           rustflags: -Zpolonius=next
@@ -41,7 +41,7 @@ jobs:
         # `make check-fmt` runs `mdtablefix --check --git`; 0.6.0 is the
         # first release with `--check` and `--git`.
         uses: >-
-          leynos/shared-actions/.github/actions/install-mdtablefix@0606ca899ce2995a0c4bc78e660e80832e6e8855
+          leynos/shared-actions/.github/actions/install-mdtablefix@2ddf19b3fd52c0f1089db0d57b015f859b80ab67
         with:
           version: '0.6.1'
       - name: Check build prerequisites
@@ -79,7 +79,7 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install Whitaker
-        uses: leynos/shared-actions/.github/actions/install-whitaker@6dea5677a84fec60ca51b07202570e3af12ffdb4
+        uses: leynos/shared-actions/.github/actions/install-whitaker@2ddf19b3fd52c0f1089db0d57b015f859b80ab67
         with:
           cranelift: 'true'
       - name: Audit dependencies
@@ -102,7 +102,7 @@ jobs:
         run: make test
       - name: Test and Measure Coverage
         if: github.event_name == 'pull_request' && env.ACT != 'true'
-        uses: leynos/shared-actions/.github/actions/generate-coverage@d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79
+        uses: leynos/shared-actions/.github/actions/generate-coverage@2ddf19b3fd52c0f1089db0d57b015f859b80ab67
         env:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: clang
           CARGO_PROFILE_DEV_CODEGEN_BACKEND: llvm
