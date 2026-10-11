@@ -155,20 +155,26 @@ cloned only on insertion, and error context is built lazily. See
 - Verify new borrow-sensitive code with the project toolchain and classify it
   with and without `-Zpolonius=next` as described in `docs/polonius.md`.
 
-- Run `make check-fmt`, `make lint`, and `make test` before committing. These
-  targets wrap the following commands, so contributors understand the exact
-  behaviour and policy enforced:
+- On a fresh Linux checkout, run `make install-build-tools` and then
+  `make check-build-tools` before build, test, or typecheck work. `make lint`
+  runs `make check-build-tools` as its own prerequisite. The install target
+  installs the pinned toolchain and checksum-verified mold binary; the check
+  target verifies them. `fmt` and `check-fmt` do not require these tools.
+- Run `make check-fmt`, `make lint`, `make typecheck`, and `make test` before
+  committing. These targets wrap the following commands, so contributors
+  understand the exact behaviour and policy enforced:
   - `make check-fmt` executes:
 
     ```sh
     cargo fmt --workspace -- --check
+    ruff format --check $(PYTHON_SOURCES)
     mdtablefix --check --git --include-untracked \
       --wrap --renumber --breaks --ellipsis --fences
     ```
 
-    validating Rust formatting across the entire workspace and Markdown
-    formatting across the files Git tracks, plus untracked files Git does not
-    ignore, without modifying files. The Markdown check needs mdtablefix 0.6.1
+    validating Rust and Python formatting and Markdown formatting across the
+    files Git tracks, plus untracked files Git does not ignore, without
+    modifying files. The Markdown check needs mdtablefix 0.6.1
     or later on `PATH`; install it with
     `cargo binstall --no-confirm mdtablefix@0.6.1` (or
     `cargo install --locked mdtablefix@0.6.1`), the version CI pins. `make fmt`
@@ -177,26 +183,47 @@ cloned only on insertion, and error context is built lazily. See
   - `make lint` executes:
 
     ```makefile
-    RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$(DEV_RUST_FLAGS)" cargo doc --no-deps
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
-    RUSTFLAGS="$(DEV_RUST_FLAGS)" whitaker --all -- --all-targets --all-features
+    make check-build-tools
+    make lint-clippy
+    make lint-whitaker
+    make lint-python
     ```
 
-    building documentation before linting every target with all features
-    enabled. Documentation warnings, Clippy warnings, and Whitaker findings
-    fail the command.
+    `make lint-clippy` executes:
+
+    ```makefile
+    RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$(DEV_RUST_FLAGS)" cargo doc --no-deps
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    ```
+
+    `make lint-whitaker` executes:
+
+    ```makefile
+    RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" whitaker --all -- --all-targets --all-features
+    ```
+
+    building documentation before linting every Rust target with all features
+    enabled. `make lint-python` runs Ruff, Pylint with the complete pinned df12
+    policy, ambrleaks, and Interrogate on managed CPython 3.14. Documentation
+    warnings and every lint finding fail the command.
+  - `make typecheck` runs `cargo check` over all Rust targets and features, then
+    runs ty with `--python-version 3.14` over every repository-owned Python
+    module under `.github`, `tests`, `scripts`, `benches`, and `benchmarks`.
   - `make test` executes:
 
     ```makefile
     TEST_CMD := $(if $(shell $(CARGO) nextest --version 2>/dev/null),nextest run,test)
+    uv run --managed-python --python 3.14 python -m unittest discover \
+      -s tests/workflow_contracts -p '*_test.py'
     test: export RUSTFLAGS := $(DEV_RUST_FLAGS)
     $(CARGO) $(TEST_CMD) $(TEST_FLAGS) $(BUILD_JOBS)
     RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" $(CARGO) test --doc --workspace --all-features
     ```
 
-    running the full test suite with `cargo-nextest` when available and
-    falling back to `cargo test`, with Rust warnings denied. It then runs
-    all-feature workspace doctests separately with Rustdoc warnings denied.
+    running the Python workflow contracts before the Rust suite. Rust uses
+    `cargo-nextest` when available and falls back to `cargo test`, with warnings
+    denied. It then runs all-feature workspace doctests separately with Rustdoc
+    warnings denied.
     Use `make fmt` (`cargo fmt --workspace`) to apply formatting fixes reported
     by the formatter check.
 - Clippy warnings MUST be disallowed.
@@ -388,7 +415,8 @@ cloned only on insertion, and error context is built lazily. See
 
 - `make spelling` runs the pinned `typos-config-builder gate`, which
   regenerates `typos.toml` from the shared en-GB-oxendict dictionary and
-  `typos.local.toml`, then checks spelling and the shared phrase corrections.
+  `typos.local.toml`, then checks all supported spelling scopes and shared
+  phrase corrections in files Git tracks. The command uses `--scope all`.
 - `typos.toml` is generated: never edit it by hand. Put narrow
   repository-specific exceptions in `typos.local.toml`, as exact or full-line
   patterns rather than bare accepted words.

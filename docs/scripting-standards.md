@@ -28,7 +28,7 @@ as a default.
 
 ## Language and runtime
 
-- Target Python 3.13 for all new scripts. Older versions may only be used when
+- Target Python 3.14 for all new scripts. Older versions may only be used when
   integration constraints require them, and any exception must be documented
   inline.
 - Each script starts with an `uv` script block, so runtime and dependency
@@ -44,12 +44,34 @@ as a default.
   example, copying or removing trees) go through the `shutil` standard library
   module.
 
+## Quality gateways
+
+The Makefile discovers every repository-owned Python module below `.github`,
+`tests`, `scripts`, `benches`, and `benchmarks`. The same inventory passes
+through each gateway, so a workflow helper or benchmark cannot avoid the checks
+applied to normal scripts and tests.
+
+- `make check-fmt` checks Python formatting with pinned Ruff on managed CPython
+  3.14; `make fmt` applies the same formatter.
+- `make lint` runs Ruff, then Pylint with its defaults and all 13 messages from
+  the pinned `df12-python-lints` policy. It also runs `ambrleaks` and requires
+  complete documentation coverage through Interrogate.
+- `make typecheck` runs pinned ty with `--python-version 3.14` over the same
+  source inventory.
+- `make test` runs Python workflow contracts on managed CPython 3.14 before the
+  Rust test suite.
+
+Fix each finding in the source. Inline `noqa`, Pylint disable comments, and
+type-ignore comments are prohibited; the gateway contract scans for them.
+`pyproject.toml` configures lint behaviour only and deliberately declares no
+Python project or build system.
+
 ### Minimal script (no CLI)
 
 ```python
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.14"
 # dependencies = ["plumbum", "cmd-mox"]
 # ///
 
@@ -79,7 +101,7 @@ Employ Cyclopts when a script requires parameters, particularly under CI with
 ```python
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.14"
 # dependencies = ["cyclopts>=2.9", "plumbum", "cmd-mox"]
 # ///
 
@@ -290,7 +312,7 @@ except FileNotFoundError:
 ```python
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.13"
+# requires-python = ">=3.14"
 # dependencies = ["cyclopts>=2.9", "plumbum", "cmd-mox"]
 # ///
 
