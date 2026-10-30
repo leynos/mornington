@@ -338,7 +338,7 @@ components, clang, and the exact mold version before each development target.
 `make check-coverage-tools` additionally requires `ld.lld`.
 
 CI uses the strict Whitaker provisioner pinned at
-`6dea5677a84fec60ca51b07202570e3af12ffdb4`, as allowlisted by
+`5a99aed78ce68dcebd3052b75c31e6f173162b1e`, as allowlisted by
 `whitaker-provisioning` 0.1.0. The action's current live descendant was
 inspected at `d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79`; it rejects suite
 overrides and uses no source fallback. The `make lint-whitaker` recipe
