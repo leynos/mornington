@@ -16,7 +16,7 @@ pub const SETUP_RUST_ACTION_PREFIX: &str = "leynos/shared-actions/.github/action
 /// The audited strict installer that rejects rolling suite pins and source
 /// fallback.
 pub const INSTALL_WHITAKER_ACTION: &str = "leynos/shared-actions/.github/actions/install-whitaker@\
-                                           6dea5677a84fec60ca51b07202570e3af12ffdb4";
+                                           5a99aed78ce68dcebd3052b75c31e6f173162b1e";
 /// The selected coverage action revision shared by the pull-request and main lanes.
 pub const COVERAGE_ACTION: &str = "leynos/shared-actions/.github/actions/generate-coverage@\
                                    d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79";
