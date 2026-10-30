@@ -98,7 +98,7 @@ const COVERAGE_WITH_LINKER: &str = concat!(
 const WHITAKER_WITH_APPROVED_ACTION: &str = concat!(
     "    steps:\n      - name: Install Whitaker\n",
     "        uses: leynos/shared-actions/.github/actions/install-whitaker@",
-    "6dea5677a84fec60ca51b07202570e3af12ffdb4\n",
+    "5a99aed78ce68dcebd3052b75c31e6f173162b1e\n",
     "        with:\n          cranelift: 'true'\n",
     "      - name: Lint\n        run: make lint\n"
 );
@@ -194,7 +194,7 @@ fn strict_whitaker_installer_precedes_lint() {
         "    steps:\n      - name: Lint\n        run: make lint\n",
         "      - name: Install Whitaker\n",
         "        uses: leynos/shared-actions/.github/actions/install-whitaker@",
-        "6dea5677a84fec60ca51b07202570e3af12ffdb4\n",
+        "5a99aed78ce68dcebd3052b75c31e6f173162b1e\n",
         "        with:\n          cranelift: 'true'\n"
     );
     let found = Workflow::new("fixture.yml", workflow)
