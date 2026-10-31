@@ -366,13 +366,13 @@ entry in `.github/dependabot.yml` (directory `/`, daily, the `dependencies` and
 `rust-toolchain` labels, one `minor-and-patch` catch-all group) opens a pull
 request when a newer toolchain exists. Review it like any other change: CI
 builds and tests the project on the new toolchain. Dated nightly versions carry
-no SemVer meaning, so whether Dependabot groups a bump or opens it alone depends
-on how it classifies the version; both are normal. The entry sets no cooldown:
-Dependabot's toolchain fetcher publishes no release date, so a cooldown would
-delay nothing.
+no SemVer meaning, so whether Dependabot groups a bump or opens it alone
+depends on how it classifies the version; both are normal. The entry sets no
+cooldown: Dependabot's toolchain fetcher publishes no release date, so a
+cooldown would delay nothing.
 
 `release.yml` names the same nightly in two places (the `setup-rust` toolchain
 input and the `cross +nightly-...` command) instead of reading the manifest.
-Dependabot updates `rust-toolchain.toml` only, so when its pull request appears,
-move both release pins to the same date in that pull request, or the release
-build lags the manifest.
+Dependabot updates `rust-toolchain.toml` only, so when its pull request
+appears, move both release pins to the same date in that pull request, or the
+release build lags the manifest.
