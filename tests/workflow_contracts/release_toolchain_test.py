@@ -32,7 +32,9 @@ class ReleaseToolchain(unittest.TestCase):
 
     def test_a_step_reads_the_manifest_channel_before_setup(self):
         """The channel is read from the manifest, ahead of setup-rust."""
-        read = re.search(r"id:\s*toolchain\b.*?rust-toolchain\.toml", RELEASE, re.S)
+        read = re.search(
+            r"id:\s*toolchain\b.*?rust-toolchain\.toml", RELEASE, re.DOTALL
+        )
         setup = RELEASE.find("setup-rust@")
         self.assertIsNotNone(read, "release.yml must read rust-toolchain.toml")
         self.assertLess(read.start(), setup, "the read must precede setup-rust")
