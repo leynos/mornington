@@ -36,7 +36,8 @@ class ReleaseToolchain(unittest.TestCase):
             r"id:\s*toolchain\b.*?rust-toolchain\.toml", RELEASE, re.DOTALL
         )
         setup = RELEASE.find("setup-rust@")
-        self.assertIsNotNone(read, "release.yml must read rust-toolchain.toml")
+        if read is None:
+            self.fail("release.yml must read rust-toolchain.toml")
         self.assertLess(read.start(), setup, "the read must precede setup-rust")
 
     def test_setup_rust_uses_the_channel(self):
