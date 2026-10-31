@@ -3,6 +3,9 @@
 Dependabot bumps the pinned nightly in ``rust-toolchain.toml`` only. A release
 build that restated the date would lag the manifest after every bump, so the
 workflow reads the channel once and both ``setup-rust`` and ``cross`` use it.
+The checks read properties of the text (a dated nightly anywhere, an expression
+in a given position), not exact lines, so a reformat of the workflow changes
+nothing.
 """
 
 import re
@@ -10,58 +13,45 @@ import tomllib
 import unittest
 from pathlib import Path
 
-import yaml
-
 REPOSITORY = Path(__file__).resolve().parents[2]
-RELEASE = REPOSITORY / ".github" / "workflows" / "release.yml"
+RELEASE = (REPOSITORY / ".github" / "workflows" / "release.yml").read_text(
+    encoding="utf-8"
+)
 TOOLCHAIN = REPOSITORY / "rust-toolchain.toml"
-READ_STEP = "Read the pinned toolchain"
-CHANNEL_EXPRESSION = "${{ steps.toolchain.outputs.channel }}"
+CHANNEL = r"\$\{\{\s*steps\.toolchain\.outputs\.channel\s*\}\}"
 DATED_NIGHTLY = re.compile(r"nightly-\d{4}-\d{2}-\d{2}")
-
-
-def build_steps() -> list[dict]:
-    """Return the release build job's steps."""
-    document = yaml.safe_load(RELEASE.read_text(encoding="utf-8"))
-    return document["jobs"]["build"]["steps"]
 
 
 class ReleaseToolchain(unittest.TestCase):
     """Hold the release build to the manifest's toolchain."""
 
-    def test_no_step_restates_a_dated_nightly(self):
-        """A date in any step would lag the manifest after a Dependabot bump."""
-        for step in build_steps():
-            with self.subTest(step=step.get("name") or step.get("uses")):
-                text = repr(step)
-                self.assertIsNone(
-                    DATED_NIGHTLY.search(text),
-                    f"a release step names a dated nightly: {text}",
-                )
+    def test_the_workflow_names_no_dated_nightly(self):
+        """A date anywhere in the workflow would lag the manifest after a bump."""
+        found = DATED_NIGHTLY.findall(RELEASE)
+        self.assertEqual(found, [], f"release.yml restates a dated nightly: {found}")
 
-    def test_the_manifest_is_read_before_the_toolchain_is_used(self):
-        """The channel step precedes setup-rust and reads the manifest."""
-        steps = build_steps()
-        names = [step.get("name") for step in steps]
-        self.assertIn(READ_STEP, names, "the release build must read the manifest")
-        read = steps[names.index(READ_STEP)]
-        self.assertEqual(read.get("id"), "toolchain")
-        self.assertIn("rust-toolchain.toml", read["run"])
-        setup = next(s for s in steps if "setup-rust@" in str(s.get("uses", "")))
-        self.assertLess(steps.index(read), steps.index(setup))
-        self.assertEqual(setup["with"]["toolchain"], CHANNEL_EXPRESSION)
+    def test_a_step_reads_the_manifest_channel_before_setup(self):
+        """The channel is read from the manifest, ahead of setup-rust."""
+        read = re.search(r"id:\s*toolchain\b.*?rust-toolchain\.toml", RELEASE, re.S)
+        setup = RELEASE.find("setup-rust@")
+        self.assertIsNotNone(read, "release.yml must read rust-toolchain.toml")
+        self.assertLess(read.start(), setup, "the read must precede setup-rust")
 
-    def test_cross_uses_the_same_channel(self):
+    def test_setup_rust_uses_the_channel(self):
+        """The setup-rust toolchain input is the manifest channel."""
+        pattern = rf"setup-rust@[^\n]*\n(?:[^\n]*\n)*?\s*toolchain:\s*{CHANNEL}"
+        self.assertRegex(RELEASE, pattern, "setup-rust must use the read channel")
+
+    def test_cross_uses_the_channel(self):
         """The cross build selects the channel the manifest names."""
-        steps = build_steps()
-        build = next(s for s in steps if s.get("name") == "Build release binary")
-        self.assertIn(f"cross +{CHANNEL_EXPRESSION} build", build["run"])
+        self.assertRegex(
+            RELEASE, rf"cross\s+\+{CHANNEL}\s+build", "cross must use the channel"
+        )
 
     def test_the_manifest_channel_is_a_dated_nightly(self):
         """The value the workflow reads is the pin Dependabot moves."""
         manifest = tomllib.loads(TOOLCHAIN.read_text(encoding="utf-8"))
-        channel = manifest["toolchain"]["channel"]
-        self.assertRegex(channel, DATED_NIGHTLY)
+        self.assertRegex(manifest["toolchain"]["channel"], DATED_NIGHTLY)
 
 
 if __name__ == "__main__":
