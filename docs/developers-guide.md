@@ -358,3 +358,15 @@ access remains capability based through `cap_std`. The bounded workflow
 properties exercise `suite_provisioning_problems` with generated label orders,
 provision positions, and reusable chains or cycles; those helpers must not
 become production parsers or a general subprocess framework.
+
+## Toolchain updates
+
+`rust-toolchain.toml` pins `nightly-2026-08-27`. Dependabot's `rust-toolchain`
+entry in `.github/dependabot.yml` (directory `/`, daily, the `dependencies` and
+`rust-toolchain` labels, one `minor-and-patch` catch-all group) opens a pull
+request when a newer toolchain exists. Review it like any other change: CI
+builds and tests the project on the new toolchain. Dated nightly versions carry
+no SemVer meaning, so whether Dependabot groups a bump or opens it alone depends
+on how it classifies the version; both are normal. The entry sets no cooldown:
+Dependabot's toolchain fetcher publishes no release date, so a cooldown would
+delay nothing.
