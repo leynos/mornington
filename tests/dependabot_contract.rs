@@ -39,7 +39,7 @@ fn dependabot_entries_cover_the_root_with_daily_minor_and_patch_updates() -> Res
     if !CARGO_MANIFEST.contains("[package]") {
         return Err("this contract applies only while Cargo.toml remains the Rust root".to_owned());
     }
-    for ecosystem in ["github-actions", "cargo"] {
+    for ecosystem in ["github-actions", "cargo", "rust-toolchain"] {
         let configured = entry(ecosystem)?;
         if !configured.contains("    directory: \"/\"\n") {
             return Err(format!(
