@@ -371,8 +371,9 @@ depends on how it classifies the version; both are normal. The entry sets no
 cooldown: Dependabot's toolchain fetcher publishes no release date, so a
 cooldown would delay nothing.
 
-`release.yml` names the same nightly in two places (the `setup-rust` toolchain
-input and the `cross +nightly-...` command) instead of reading the manifest.
-Dependabot updates `rust-toolchain.toml` only, so when its pull request
-appears, move both release pins to the same date in that pull request, or the
-release build lags the manifest.
+`release.yml` reads the channel from `rust-toolchain.toml` once, in a step that
+precedes the toolchain setup, and passes it to both the `setup-rust` toolchain
+input and the `cross +<channel>` command, so a Dependabot toolchain bump moves
+the release build with the manifest and the workflow names no dated nightly.
+`tests/workflow_contracts/release_toolchain_test.py` parses the workflow and
+fails on a hard-coded nightly.

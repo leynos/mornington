@@ -45,10 +45,19 @@ jobs:
       - uses: actions/checkout@900f2210b1d28bbbd0bd22d17926b9e224e8f231
         with:
           persist-credentials: false
+      # The one place the release build learns its toolchain: the manifest that
+      # Dependabot keeps current. Both the setup-rust input and the cross
+      # command below read this output rather than restating a date.
+      - name: Read the pinned toolchain
+        id: toolchain
+        run: |
+          set -euo pipefail
+          channel="$(python3 -c 'import tomllib; print(tomllib.load(open("rust-toolchain.toml", "rb"))["toolchain"]["channel"])')"
+          printf 'channel=%s\n' "$channel" >> "$GITHUB_OUTPUT"
       - uses: leynos/shared-actions/.github/actions/setup-rust@6cec89bac47a21cf756d68d638a9a510998e57f8
         with:
           expect-cache: any
-          toolchain: nightly-2026-08-27
+          toolchain: ${{ steps.toolchain.outputs.channel }}
           rustflags: -Zpolonius=next
       - name: Log Rust compiler configuration
         run: |-
@@ -82,7 +91,7 @@ jobs:
       - name: Build release binary
         # Select the generated project's supported compiler explicitly and
         # omit repository-local linker and Cranelift configuration.
-        run: cross +nightly-2026-08-27 build --release --target ${{ matrix.target }}
+        run: cross +${{ steps.toolchain.outputs.channel }} build --release --target ${{ matrix.target }}
       - name: Prepare artefact
         run: |
           mkdir -p artefacts/${{ matrix.os }}-${{ matrix.arch }}

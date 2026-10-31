@@ -130,7 +130,8 @@ ifeq ($(WITH_ACT),1)
 endif
 
 test-python: ## Run repository-owned Python tests on the baseline interpreter
-	$(PYTHON) -m unittest discover -s tests/workflow_contracts -p '*_test.py'
+	$(UV_ENV) $(UV) run --no-project --managed-python --python $(PYTHON_BASELINE) \
+		--with 'PyYAML==6.0.3' python -m unittest discover -s tests/workflow_contracts -p '*_test.py'
 
 target/debug/$(TARGET): check-build-tools ## Build the debug binary
 	RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) build $(BUILD_JOBS) --bin $(TARGET)
