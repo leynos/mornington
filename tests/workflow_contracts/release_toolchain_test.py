@@ -56,7 +56,7 @@ def run_reader(manifest: str | None) -> tuple[int, str]:
         output = root / "github-output"
         output.touch()
         env = {"PATH": f"{bin_dir}:/usr/bin:/bin", "GITHUB_OUTPUT": str(output)}
-        done = subprocess.run(  # noqa: S603 - fixed argv, script from the repository
+        done = subprocess.run(
             ["/bin/bash", "-c", read_step_script()],
             cwd=root,
             env=env,
