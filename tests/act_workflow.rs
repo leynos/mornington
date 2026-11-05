@@ -1,5 +1,48 @@
 //! Regression contracts for the generated Act workflow's Linux linker setup.
 
+use serde::Deserialize;
+
+/// The parsed workflow, reduced to its steps.
+#[derive(Deserialize)]
+struct Workflow {
+    /// Every job by name.
+    jobs: std::collections::BTreeMap<String, Job>,
+}
+
+/// One workflow job.
+#[derive(Deserialize)]
+struct Job {
+    /// The job's steps; reusable-workflow jobs have none.
+    #[serde(default)]
+    steps: Vec<Step>,
+}
+
+/// The step fields these contracts read.
+#[derive(Deserialize)]
+struct Step {
+    /// The step's display name.
+    name: Option<String>,
+    /// The step's `if` expression.
+    #[serde(rename = "if")]
+    condition: Option<String>,
+    /// The step's shell command.
+    run: Option<String>,
+    /// The action the step uses.
+    uses: Option<String>,
+}
+
+/// Parses a workflow and returns every job's steps, whatever the formatting.
+fn workflow_steps(workflow: &str) -> Vec<Step> {
+    match serde_saphyr::from_str::<Workflow>(workflow) {
+        Ok(parsed) => parsed
+            .jobs
+            .into_values()
+            .flat_map(|job| job.steps)
+            .collect(),
+        Err(error) => panic!("the CI workflow must parse as YAML: {error}"),
+    }
+}
+
 fn workflow_step<'workflow>(workflow: &'workflow str, name: &str) -> (&'workflow str, usize) {
     let marker = format!("- name: {name}\n");
     let Some((preceding_workflow, remaining_workflow)) = workflow.split_once(&marker) else {
@@ -150,17 +193,29 @@ fn act_enabled_tests_execute_the_ci_workflow() {
             .any(|line| line == "use-sccache: \"${{ env.ACT != 'true' }}\""),
         "the nested Act run must disable sccache while regular CI retains it"
     );
+    let steps = workflow_steps(ci_workflow);
+    let act_test = steps
+        .iter()
+        .find(|step| step.name.as_deref() == Some("Test in Act"));
     assert!(
-        ci_workflow
-            .contains("- name: Test in Act\n        if: env.ACT == 'true'\n        run: make test"),
+        act_test.is_some_and(
+            |step| step.condition.as_deref() == Some("env.ACT == 'true'")
+                && step.run.as_deref() == Some("make test")
+        ),
         "the nested Act run must execute the CI test target without coverage artefact upload"
     );
+    let coverage = steps
+        .iter()
+        .find(|step| step.name.as_deref() == Some("Test and Measure Coverage"));
     assert!(
-        ci_workflow.contains(concat!(
-            "- name: Test and Measure Coverage\n",
-            "        if: github.event_name == 'pull_request' && env.ACT != 'true'\n",
-            "        uses: leynos/shared-actions/.github/actions/generate-coverage@"
-        )),
+        coverage.is_some_and(|step| {
+            step.condition
+                .as_deref()
+                .is_some_and(|condition| condition.contains("env.ACT != 'true'"))
+                && step.uses.as_deref().is_some_and(|uses| {
+                    uses.starts_with("leynos/shared-actions/.github/actions/generate-coverage@")
+                })
+        }),
         "regular CI must retain its coverage measurement workflow"
     );
 }
