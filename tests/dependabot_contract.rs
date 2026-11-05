@@ -92,6 +92,42 @@ fn config() -> Result<Config, String> {
     serde_saphyr::from_str(DEPENDABOT).map_err(|error| format!("dependabot.yml: {error}"))
 }
 
+/// Checks one entry: rooted, daily, canonically labelled, catch-all last.
+fn check_entry(configured: &Update, ecosystem: &str) -> Result<(), String> {
+    if configured.directory != "/" {
+        return Err(format!(
+            "Dependabot {ecosystem} must cover the repository root"
+        ));
+    }
+    if configured.schedule.interval != "daily" {
+        return Err(format!("Dependabot {ecosystem} must run daily"));
+    }
+    if configured.labels != ["dependencies", ecosystem] {
+        return Err(format!(
+            "Dependabot {ecosystem} must retain its canonical labels"
+        ));
+    }
+    check_catch_all(&configured.groups, ecosystem)
+}
+
+/// The last group is the minor-and-patch catch-all over every dependency.
+fn check_catch_all(groups: &Groups, ecosystem: &str) -> Result<(), String> {
+    let Some((name, catch_all)) = groups.0.last() else {
+        return Err(format!("Dependabot {ecosystem} has no groups"));
+    };
+    if name != "minor-and-patch" {
+        return Err(format!(
+            "Dependabot {ecosystem} must end with the minor-and-patch catch-all"
+        ));
+    }
+    if catch_all.patterns != ["*"] || catch_all.update_types != ["minor", "patch"] {
+        return Err(format!(
+            "Dependabot {ecosystem} must keep the catch-all on minor and patch updates"
+        ));
+    }
+    Ok(())
+}
+
 /// Every owned ecosystem is daily, rooted, and ends with the permitted catch-all.
 #[test]
 fn dependabot_entries_cover_the_root_with_daily_minor_and_patch_updates() -> Result<(), String> {
@@ -107,33 +143,7 @@ fn dependabot_entries_cover_the_root_with_daily_minor_and_patch_updates() -> Res
         else {
             return Err(format!("Dependabot has no {ecosystem} entry"));
         };
-        if configured.directory != "/" {
-            return Err(format!(
-                "Dependabot {ecosystem} must cover the repository root"
-            ));
-        }
-        if configured.schedule.interval != "daily" {
-            return Err(format!("Dependabot {ecosystem} must run daily"));
-        }
-        let expected_labels = ["dependencies", ecosystem];
-        if configured.labels != expected_labels {
-            return Err(format!(
-                "Dependabot {ecosystem} must retain its canonical labels"
-            ));
-        }
-        let Some((name, catch_all)) = configured.groups.0.last() else {
-            return Err(format!("Dependabot {ecosystem} has no groups"));
-        };
-        if name != "minor-and-patch" {
-            return Err(format!(
-                "Dependabot {ecosystem} must end with the minor-and-patch catch-all"
-            ));
-        }
-        if catch_all.patterns != ["*"] || catch_all.update_types != ["minor", "patch"] {
-            return Err(format!(
-                "Dependabot {ecosystem} must keep the catch-all on minor and patch updates"
-            ));
-        }
+        check_entry(configured, ecosystem)?;
     }
     Ok(())
 }
