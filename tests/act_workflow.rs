@@ -31,14 +31,15 @@ struct Step {
     uses: Option<String>,
 }
 
-/// Parses a workflow and returns every job's steps, whatever the formatting.
-fn workflow_steps(workflow: &str) -> Vec<Step> {
+/// Parses a workflow and returns the named job's steps, whatever the formatting.
+fn workflow_steps(workflow: &str, job: &str) -> Vec<Step> {
     match serde_saphyr::from_str::<Workflow>(workflow) {
-        Ok(parsed) => parsed
-            .jobs
-            .into_values()
-            .flat_map(|job| job.steps)
-            .collect(),
+        Ok(mut parsed) => {
+            let Some(found) = parsed.jobs.remove(job) else {
+                panic!("the workflow must define the {job} job");
+            };
+            found.steps
+        }
         Err(error) => panic!("the CI workflow must parse as YAML: {error}"),
     }
 }
@@ -193,7 +194,7 @@ fn act_enabled_tests_execute_the_ci_workflow() {
             .any(|line| line == "use-sccache: \"${{ env.ACT != 'true' }}\""),
         "the nested Act run must disable sccache while regular CI retains it"
     );
-    let steps = workflow_steps(ci_workflow);
+    let steps = workflow_steps(ci_workflow, "build-test");
     let act_test = steps
         .iter()
         .find(|step| step.name.as_deref() == Some("Test in Act"));
