@@ -71,32 +71,32 @@ fn scripts_follow_the_channel_in_the_toolchain_file(
         Utf8Path::new("rust-toolchain.toml"),
         &toolchain.replace(&original, CHANNEL),
     )?;
-    if fixture.pinned_channel()? != CHANNEL {
-        return Err("pinned_channel must read the rewritten channel".to_owned());
-    }
-    for script in [ScriptName::Install, ScriptName::Check] {
-        let output = fixture.run(script, &[], &[("HOST_ARCH", "x86_64")])?;
-        if !output.status.success() {
-            return Err(format!("{script:?} must succeed: {output:?}"));
-        }
-    }
+    let read_back = fixture.pinned_channel()?;
+    let failures: Vec<String> = [ScriptName::Install, ScriptName::Check]
+        .into_iter()
+        .map(|script| (script, fixture.run(script, &[], &[("HOST_ARCH", "x86_64")])))
+        .filter_map(|(script, result)| match result {
+            Ok(output) if output.status.success() => None,
+            other => Some(format!("{script:?} must succeed: {other:?}")),
+        })
+        .collect();
     let calls = fixture.read(Utf8Path::new("commands.log"))?;
-    for expected in [
+    let missing: Vec<String> = [
         format!("rustup toolchain install {CHANNEL} "),
         format!("rustup run {CHANNEL} rustc"),
-    ] {
-        if !calls.contains(&expected) {
-            return Err(format!(
-                "expected {expected:?} in the recorded calls: {calls}"
-            ));
-        }
-    }
-    if calls.contains(&original) {
-        return Err(format!(
-            "the original channel {original} must not be used: {calls}"
-        ));
-    }
-    Ok(())
+    ]
+    .into_iter()
+    .filter(|expected| !calls.contains(expected))
+    .collect();
+    let stale = calls.contains(&original);
+    (read_back == CHANNEL && failures.is_empty() && missing.is_empty() && !stale)
+        .then_some(())
+        .ok_or_else(|| {
+            format!(
+                "read back {read_back:?}; failures {failures:?}; missing {missing:?}; original \
+                 channel used: {stale}; calls: {calls}"
+            )
+        })
 }
 
 /// A checksum mismatch must fail before extraction or installation.
