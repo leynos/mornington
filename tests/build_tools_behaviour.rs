@@ -33,10 +33,10 @@ fn installer_requests_components_and_installs_verified_artefact(
         ));
     }
     let calls = fixture.read(Utf8Path::new("commands.log"))?;
-    if !calls.contains(concat!(
-        "rustup toolchain install nightly-2026-08-27 --profile minimal ",
-        "--component clippy --component llvm-tools-preview ",
-        "--component rustc-codegen-cranelift-preview --component rustfmt"
+    let channel = fixture.pinned_channel()?;
+    if !calls.contains(&format!(
+        "rustup toolchain install {channel} --profile minimal --component clippy --component \
+         llvm-tools-preview --component rustc-codegen-cranelift-preview --component rustfmt"
     )) {
         return Err(format!(
             "installer must request the declared nightly and all components: {calls}"
