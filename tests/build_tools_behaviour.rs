@@ -56,6 +56,49 @@ fn installer_requests_components_and_installs_verified_artefact(
     Ok(())
 }
 
+/// Both scripts follow whatever channel the toolchain file names, so a daily
+/// Dependabot bump needs no test edit: an unrelated nightly in the copied file
+/// must be the one installed and the one the checker runs.
+#[rstest]
+fn scripts_follow_the_channel_in_the_toolchain_file(
+    scripts: Result<ScriptFixture, String>,
+) -> Result<(), String> {
+    const CHANNEL: &str = "nightly-2030-01-02";
+    let fixture = scripts?;
+    let original = fixture.pinned_channel()?;
+    let toolchain = fixture.read(Utf8Path::new("rust-toolchain.toml"))?;
+    fixture.write(
+        Utf8Path::new("rust-toolchain.toml"),
+        &toolchain.replace(&original, CHANNEL),
+    )?;
+    if fixture.pinned_channel()? != CHANNEL {
+        return Err("pinned_channel must read the rewritten channel".to_owned());
+    }
+    for script in [ScriptName::Install, ScriptName::Check] {
+        let output = fixture.run(script, &[], &[("HOST_ARCH", "x86_64")])?;
+        if !output.status.success() {
+            return Err(format!("{script:?} must succeed: {output:?}"));
+        }
+    }
+    let calls = fixture.read(Utf8Path::new("commands.log"))?;
+    for expected in [
+        format!("rustup toolchain install {CHANNEL} "),
+        format!("rustup run {CHANNEL} rustc"),
+    ] {
+        if !calls.contains(&expected) {
+            return Err(format!(
+                "expected {expected:?} in the recorded calls: {calls}"
+            ));
+        }
+    }
+    if calls.contains(&original) {
+        return Err(format!(
+            "the original channel {original} must not be used: {calls}"
+        ));
+    }
+    Ok(())
+}
+
 /// A checksum mismatch must fail before extraction or installation.
 #[rstest]
 fn installer_rejects_corrupt_download(

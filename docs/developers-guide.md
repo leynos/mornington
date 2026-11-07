@@ -351,13 +351,16 @@ The subprocess fixtures in `tests/build_tools_support` belong only to the
 build-tool behavioural contracts: they copy the actual scripts, expose an
 explicit utility allowlist, and inject command shims into each child's isolated
 environment. Script and removable-tool enums constrain subprocess execution and
-prerequisite mutations; fixture reads and writes accept `Utf8Path` values. They
-perform no network downloads or host installations. Temporary directory
-allocation and cleanup use `tempfile` RAII, while fixture and Make probe file
-access remains capability based through `cap_std`. The bounded workflow
-properties exercise `suite_provisioning_problems` with generated label orders,
-provision positions, and reusable chains or cycles; those helpers must not
-become production parsers or a general subprocess framework.
+prerequisite mutations; fixture reads and writes accept `Utf8Path` values.
+`ScriptFixture::pinned_channel` returns the channel of the fixture's copied
+`rust-toolchain.toml`, so tests never restate the pinned date, and returns an
+error when that file declares no `channel` line. They perform no network
+downloads or host installations. Temporary directory allocation and cleanup use
+`tempfile` RAII, while fixture and Make probe file access remains capability
+based through `cap_std`. The bounded workflow properties exercise
+`suite_provisioning_problems` with generated label orders, provision positions,
+and reusable chains or cycles; those helpers must not become production parsers
+or a general subprocess framework.
 
 ## Toolchain updates
 

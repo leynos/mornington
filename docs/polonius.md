@@ -60,7 +60,7 @@ Then classify the changed form under plain NLL by overriding the checked-in
 flag deliberately:
 
 ```sh
-RUSTFLAGS= cargo +nightly-2026-08-27 check --all-targets --all-features
+RUSTFLAGS= cargo check --all-targets --all-features
 ```
 
 A no-flag failure establishes that the design genuinely requires Polonius; it
