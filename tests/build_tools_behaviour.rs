@@ -88,13 +88,34 @@ fn scripts_follow_the_channel_in_the_toolchain_file(
     .into_iter()
     .filter(|expected| !calls.contains(expected))
     .collect();
+    // Every toolchain-scoped call, not just one probe, must name the channel.
+    let scoped: Vec<&str> = calls
+        .lines()
+        .filter(|line| {
+            line.starts_with("rustup run ")
+                || line.starts_with("rustup toolchain install ")
+                || line.contains(" --toolchain ")
+        })
+        .collect();
+    let wrong: Vec<&str> = scoped
+        .iter()
+        .copied()
+        .filter(|line| !line.contains(CHANNEL))
+        .collect();
     let stale = calls.contains(&original);
-    (read_back == CHANNEL && failures.is_empty() && missing.is_empty() && !stale)
+    (read_back == CHANNEL
+        && failures.is_empty()
+        && missing.is_empty()
+        && wrong.is_empty()
+        && scoped.len() >= 3
+        && !stale)
         .then_some(())
         .ok_or_else(|| {
             format!(
-                "read back {read_back:?}; failures {failures:?}; missing {missing:?}; original \
-                 channel used: {stale}; calls: {calls}"
+                "read back {read_back:?}; failures {failures:?}; missing {missing:?}; wrong \
+                 channel {wrong:?}; scoped calls {}; original channel used: {stale}; calls: \
+                 {calls}",
+                scoped.len()
             )
         })
 }
