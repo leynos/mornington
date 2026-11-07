@@ -69,6 +69,17 @@ fn scripts_follow_the_channel_in_the_toolchain_file() -> Result<(), String> {
     ensure(scoped.iter().all(|line| line.contains(CHANNEL)), || {
         format!("every scoped call must name {CHANNEL}: {scoped:?}")
     })?;
+    // Each expected command, with the channel in its own argument position.
+    for expected in [
+        format!("rustup toolchain install {CHANNEL} "),
+        format!("rustup run {CHANNEL} rustc --version"),
+        format!("rustup run {CHANNEL} rustc -vV"),
+        format!("rustup component list --toolchain {CHANNEL} "),
+    ] {
+        ensure(calls.contains(&expected), || {
+            format!("missing {expected:?} in the recorded calls: {calls}")
+        })?;
+    }
     ensure(!calls.contains(&original), || {
         format!("the original channel {original} must not be used: {calls}")
     })
