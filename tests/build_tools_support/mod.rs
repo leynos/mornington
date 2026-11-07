@@ -239,6 +239,25 @@ impl ScriptFixture {
             .map_err(|error| format!("reading fixture {name}: {error}"))
     }
 
+    /// Returns the channel of the copied `rust-toolchain.toml`, so no test restates
+    /// a date that Dependabot moves daily.
+    ///
+    /// Example: `fixture.pinned_channel()?` is the pinned `nightly-YYYY-MM-DD`.
+    pub fn pinned_channel(&self) -> Result<String, String> {
+        let toolchain = self.read(Utf8Path::new("rust-toolchain.toml"))?;
+        toolchain
+            .lines()
+            .find_map(|line| {
+                let value = line
+                    .trim()
+                    .strip_prefix("channel")?
+                    .trim()
+                    .strip_prefix('=')?;
+                Some(value.trim().trim_matches('"').to_owned())
+            })
+            .ok_or_else(|| "rust-toolchain.toml declares no channel".to_owned())
+    }
+
     /// Replaces one fixture input without touching the source repository.
     ///
     /// Example: `fixture.write(Utf8Path::new("tools/mold/VERSION"), "2.41.0\n")`.
