@@ -73,6 +73,29 @@ impl Step<'_> {
             .any(|revision| !revision.trim().is_empty())
     }
 
+    /// Reports whether a `uses:` line names `expected` followed by a full
+    /// 40-digit hexadecimal commit SHA, whatever that commit is.
+    pub(super) fn uses_action_at_full_sha(&self, expected: Text<'_>) -> bool {
+        self.lines
+            .iter()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                trimmed
+                    .strip_prefix("- ")
+                    .unwrap_or(trimmed)
+                    .strip_prefix("uses:")
+            })
+            .map(str::trim)
+            .filter_map(|value| value.strip_prefix(expected.0))
+            .filter_map(|revision| revision.split_whitespace().next())
+            .any(|revision| {
+                revision.len() == 40
+                    && revision
+                        .bytes()
+                        .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+            })
+    }
+
     pub(super) fn has_compact(&self, expected: Text<'_>) -> bool {
         self.lines.iter().any(|line| {
             line.chars()

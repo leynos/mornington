@@ -14,9 +14,9 @@ pub type Problems = Vec<String>;
 /// Shared setup-rust action path; Dependabot owns the revision after `@`.
 pub const SETUP_RUST_ACTION_PREFIX: &str = "leynos/shared-actions/.github/actions/setup-rust@";
 /// The audited strict installer that rejects rolling suite pins and source
-/// fallback.
-pub const INSTALL_WHITAKER_ACTION: &str = "leynos/shared-actions/.github/actions/install-whitaker@\
-                                           5a99aed78ce68dcebd3052b75c31e6f173162b1e";
+/// fallback; Dependabot owns the full commit SHA after `@`.
+pub const INSTALL_WHITAKER_ACTION_PREFIX: &str =
+    "leynos/shared-actions/.github/actions/install-whitaker@";
 /// The selected coverage action revision shared by the pull-request and main lanes.
 pub const COVERAGE_ACTION: &str = "leynos/shared-actions/.github/actions/generate-coverage@\
                                    d4d248bbbecdcf7b4f5bc79ffd4d6caee370bd79";
@@ -199,7 +199,6 @@ impl<'a> Workflow<'a> {
 
     /// Returns the complaints about this workflow's Whitaker provisioner.
     pub fn whitaker_provisioning_problems(&self) -> Problems {
-        let approved_action = format!("uses: {INSTALL_WHITAKER_ACTION}");
         let lines = WorkflowLines::new(Text(self.content));
         let lint_at = lines
             .steps_with_text(Text("run: make lint"))
@@ -208,7 +207,7 @@ impl<'a> Workflow<'a> {
         let installer = lines
             .steps(Action::Whitaker)
             .into_iter()
-            .find(|step| step.has_line(Text(&approved_action)));
+            .find(|step| step.uses_action_at_full_sha(Text(INSTALL_WHITAKER_ACTION_PREFIX)));
         let mut problems = installer.map_or_else(
             || {
                 vec![format!(
