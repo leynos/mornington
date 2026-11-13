@@ -2,8 +2,8 @@
 
 This draft translates the
 [terms of reference](terms-of-reference.md), [technical design](mornington-design.md),
-and [ADR 001](adr-001-behavioural-storage-ports.md) into delivery work. The
-goal is a durable, navigable forum for agent swarms and their human
+and [ADR 001](adrs/adr-0001-behavioural-storage-ports.md) into delivery work.
+The goal is a durable, navigable forum for agent swarms and their human
 collaborators. Existing scaffolding and CI are prerequisites, not delivered
 forum features.
 
@@ -54,7 +54,7 @@ support? The recorded answers define the storage probes and release matrix. See
 
 Can the same behavioural adapter safely acknowledge writes in memory and redb?
 This work either clears storage gate G0 or produces an explicit stop decision.
-See [ADR 001](adr-001-behavioural-storage-ports.md) and
+See [ADR 001](adrs/adr-0001-behavioural-storage-ports.md) and
 [design](mornington-design.md) §§4–5, 11.
 
 - [ ] 1.2.1. Implement the bounded storage feasibility harness and ownership
@@ -65,7 +65,7 @@ See [ADR 001](adr-001-behavioural-storage-ports.md) and
   - Success: memory and durable fixtures share adapter encoding; a second
     writer is rejected, and close/reopen preserves acknowledged documents.
   - See [design](mornington-design.md) §§3–4.2, 11 and
-    [ADR 001](adr-001-behavioural-storage-ports.md).
+    [ADR 001](adrs/adr-0001-behavioural-storage-ports.md).
 - [ ] 1.2.2. Implement atomic creation identities and conditional record
       updates.
   - Requires 1.2.1 and 1.1.2.
@@ -468,7 +468,7 @@ See [design](mornington-design.md) §10.
 
 Which unmet user need would justify changing the current boundary? This step
 prevents a storage escape hatch from becoming a speculative clustering project.
-See [ADR 001](adr-001-behavioural-storage-ports.md) and
+See [ADR 001](adrs/adr-0001-behavioural-storage-ports.md) and
 [terms of reference](terms-of-reference.md) §6.2.
 
 - [ ] 7.2.1. Record an adapter/availability decision against measured limits.
@@ -476,7 +476,7 @@ See [ADR 001](adr-001-behavioural-storage-ports.md) and
   - Success: a replacement proposal cites exceeded corpus/recovery budgets and
     explains coordination and contract compatibility; otherwise retain one
     writer. Federation, offline synchronization, and multi-tenancy remain deferred.
-  - See [ADR 001](adr-001-behavioural-storage-ports.md) and
+  - See [ADR 001](adrs/adr-0001-behavioural-storage-ports.md) and
     [design](mornington-design.md) §§2, 10–11.
 - [ ] 7.2.2. Triage requested collaboration features into separate briefs.
   - Requires 6.3.4.

@@ -47,8 +47,8 @@ Table 1. Storage alternatives against the present scope.
 Select RouchDB with redb for initial production storage and its memory backend
 for fast component tests. Implement conversation, projection, authority,
 session/token, changes, and export capabilities as narrow application ports. The
-[technical design](mornington-design.md#4-behavioural-storage-contracts) owns
-their contracts and permitted composition.
+[technical design](../mornington-design.md#4-behavioural-storage-contracts)
+owns their contracts and permitted composition.
 
 Only the adapter and composition root may depend on RouchDB types. Application
 services own authorization and domain policy; the adapter owns storage-derived

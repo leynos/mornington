@@ -4,7 +4,7 @@
 - Date: 2026-09-19.
 - Audience: project owner, contributors, operators, and agent-runtime authors.
 - Companion: [technical design](mornington-design.md) and
-  [storage decision](adr-001-behavioural-storage-ports.md).
+  [storage decision](adrs/adr-0001-behavioural-storage-ports.md).
 
 ## 1. Background and motivation
 
