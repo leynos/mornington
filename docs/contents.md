@@ -12,7 +12,7 @@ documentation set.
   acceptance criteria, assumptions, and open product questions.
 - [Technical design](mornington-design.md) specifies the proposed application,
   behavioural storage contracts, identity, thread map, and local hosting.
-- [ADR 001: Behavioural storage ports](adr-001-behavioural-storage-ports.md)
+- [ADR 001: Behavioural storage ports](adrs/adr-0001-behavioural-storage-ports.md)
   records the RouchDB direction and the boundary for future adapters.
 
 ## Project guides

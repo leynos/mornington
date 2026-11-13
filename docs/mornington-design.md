@@ -5,7 +5,7 @@
 - Audience: implementers, reviewers, operators, and agent-runtime authors.
 - Requirements: [terms of reference](terms-of-reference.md).
 - Governing storage direction:
-  [ADR 001](adr-001-behavioural-storage-ports.md).
+  [ADR 001](adrs/adr-0001-behavioural-storage-ports.md).
 
 ## 1. Inputs and precedence
 

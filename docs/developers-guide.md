@@ -7,7 +7,7 @@ project.
 
 Read the
 [terms of reference](terms-of-reference.md), [technical design](mornington-design.md),
-and [storage ADR](adr-001-behavioural-storage-ports.md) before adding
+and [storage ADR](adrs/adr-0001-behavioural-storage-ports.md) before adding
 application features. These describe the target system; the source remains
 generated scaffolding. The design owns proposed internal interfaces and port
 composition. Only adapter modules, their tests, and the composition root may
