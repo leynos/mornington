@@ -71,9 +71,9 @@ jobs:
           key: cross-${{ env.CROSS_REVISION }}
       - name: Install cross
         env:
-          # Clear repository build flags from .cargo/config.toml (the mold
-          # linker flag) before installing cross from CROSS_REVISION. Release
-          # builds use LLVM, the default codegen backend.
+          # Clear repository build flags from .cargo/config.toml (the
+          # mold linker flag) before installing cross from CROSS_REVISION.
+          # Release builds use LLVM, the default codegen backend.
           RUSTFLAGS: ""
         run: |
           if [ -x "$HOME/.cargo/bin/cross" ]; then
