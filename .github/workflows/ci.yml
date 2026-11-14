@@ -51,7 +51,7 @@ jobs:
       - name: Format
         run: make check-fmt
       - name: Markdown lint
-        uses: DavidAnson/markdownlint-cli2-action@2df9e28eb87988518ef3880c34edad45d65b1668
+        uses: DavidAnson/markdownlint-cli2-action@2e4139533dbfd7d0476295a9e8ada75220dfd882
         with:
           globs: '**/*.md'
       - name: Check the CV-005 contracts
