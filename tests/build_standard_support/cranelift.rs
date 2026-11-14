@@ -2,6 +2,8 @@
 
 /// The Cargo configuration whose development profile selects the backend.
 pub const CONFIG: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/.cargo/config.toml"));
+/// The root manifest, which Cargo also reads for a development-profile backend.
+pub const MANIFEST: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
 /// The pinned Rust toolchain that must supply the selected backend component.
 pub const TOOLCHAIN: &str =
     include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/rust-toolchain.toml"));
@@ -41,6 +43,22 @@ fn table_value(config: &str, table: &str, key: &str) -> Result<Option<String>, S
     }
 }
 
+/// Returns the complaint, if any, about a manifest that selects a development
+/// backend other than LLVM.
+pub fn manifest_problems(manifest: &str) -> Result<Vec<String>, String> {
+    let development = table_value(manifest, "profile.dev", "codegen-backend")?;
+    Ok(
+        if matches!(development.as_deref(), None | Some("\"llvm\"")) {
+            Vec::new()
+        } else {
+            vec![
+                "Cargo.toml [profile.dev] must leave the codegen backend unset or select LLVM"
+                    .to_owned(),
+            ]
+        },
+    )
+}
+
 /// Returns every missing or malformed Cranelift activation prerequisite.
 ///
 /// Cargo selects the backend through the `profile.dev` configuration, enabled
@@ -53,8 +71,9 @@ pub fn problems(config: &str, toolchain: &str) -> Result<Vec<String>, String> {
         problems.push("[unstable] must enable codegen-backend".to_owned());
     }
     let development = table_value(config, "profile.dev", "codegen-backend")?;
-    if development.as_deref() != Some("\"cranelift\"") {
-        problems.push("[profile.dev] must select the Cranelift codegen backend".to_owned());
+    if !matches!(development.as_deref(), None | Some("\"llvm\"")) {
+        problems
+            .push("[profile.dev] must leave the codegen backend unset or select LLVM".to_owned());
     }
     let component = format!("\"{CRANELIFT_COMPONENT}\"");
     if !toolchain
