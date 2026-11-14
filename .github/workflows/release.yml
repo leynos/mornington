@@ -71,8 +71,9 @@ jobs:
           key: cross-${{ env.CROSS_REVISION }}
       - name: Install cross
         env:
-          # Clear repository build flags from .cargo/config.toml (mold linker
-          # and Cranelift codegen-backend) before installing cross from CROSS_REVISION.
+          # Clear repository build flags from .cargo/config.toml (the mold
+          # linker flag) before installing cross from CROSS_REVISION. Release
+          # builds use LLVM, the default codegen backend.
           RUSTFLAGS: ""
         run: |
           if [ -x "$HOME/.cargo/bin/cross" ]; then
@@ -90,7 +91,7 @@ jobs:
             ${{ runner.os }}-cargo-${{ matrix.target }}-
       - name: Build release binary
         # Select the generated project's supported compiler explicitly and
-        # omit repository-local linker and Cranelift configuration.
+        # omit repository-local linker configuration.
         run: cross +${{ steps.toolchain.outputs.channel }} build --release --target ${{ matrix.target }}
       - name: Prepare artefact
         run: |

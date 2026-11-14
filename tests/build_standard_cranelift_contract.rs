@@ -3,7 +3,22 @@
 #[path = "build_standard_support/cranelift.rs"]
 mod cranelift;
 
-use cranelift::{CONFIG, TOOLCHAIN, problems};
+use cranelift::{CONFIG, MANIFEST, TOOLCHAIN, manifest_problems, problems};
+
+/// The root manifest leaves the development backend unset or on LLVM, and a
+/// manifest that selects Cranelift is refused.
+#[test]
+fn the_manifest_does_not_select_cranelift() -> Result<(), String> {
+    let real = manifest_problems(MANIFEST)?;
+    if !real.is_empty() {
+        return Err(format!("the manifest selects a backend: {real:#?}"));
+    }
+    let mutated = format!("{MANIFEST}\n[profile.dev]\ncodegen-backend = \"cranelift\"\n");
+    if manifest_problems(&mutated)?.is_empty() {
+        return Err("a manifest selecting Cranelift passed".to_owned());
+    }
+    Ok(())
+}
 
 /// The real Cargo configuration keeps the unstable key and leaves the
 /// development profile off Cranelift, while the pinned toolchain keeps the
@@ -18,7 +33,8 @@ fn development_builds_keep_cranelift_available_but_unselected() -> Result<(), St
     }
 }
 
-/// Removing any part of the actual activation path must fail, rather than being
+/// Selecting Cranelift for the development profile, or removing the opt-in key
+/// or the component that keeps it available, must fail, rather than being
 /// masked by unrelated `RUSTFLAGS` contracts.
 #[test]
 fn cranelift_activation_mutations_are_refused() -> Result<(), String> {
