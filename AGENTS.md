@@ -261,8 +261,9 @@ cloned only on insertion, and error context is built lazily. See
     `make lint-clippy` executes:
 
     ```makefile
-    RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$(DEV_RUST_FLAGS)" cargo doc --no-deps
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" cargo doc --no-deps
+    RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" \
+      cargo clippy --workspace --all-targets --all-features -- -D warnings
     ```
 
     `make lint-whitaker` executes:
@@ -282,14 +283,13 @@ cloned only on insertion, and error context is built lazily. See
 
     ```makefile
     TEST_CMD := $(if $(shell $(CARGO) nextest --version 2>/dev/null),nextest run,test)
-    uv run --managed-python --python 3.14 python -m unittest discover \
-      -s tests/workflow_contracts -p '*_test.py'
-    test: export RUSTFLAGS := $(DEV_RUST_FLAGS)
-    $(CARGO) $(TEST_CMD) $(TEST_FLAGS) $(BUILD_JOBS)
-    RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" $(CARGO) test --doc --workspace --all-features
+    RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" $(CARGO) $(TEST_CMD) $(TEST_FLAGS) $(BUILD_JOBS)
+    RUSTDOCFLAGS="$(RUSTDOC_FLAGS)" RUSTFLAGS="$${RUSTFLAGS:+$$RUSTFLAGS }$(DEV_RUST_FLAGS)" \
+      $(CARGO) test --doc --workspace --all-features
     ```
 
-    running the Python workflow contracts before the Rust suite. Rust uses
+    running `test-python`, which runs the Python workflow contracts in
+    `tests/workflow_contracts`, before the Rust suite. Rust uses
     `cargo-nextest` when available and falls back to `cargo test`, with warnings
     denied. It then runs all-feature workspace doctests separately with Rustdoc
     warnings denied.
