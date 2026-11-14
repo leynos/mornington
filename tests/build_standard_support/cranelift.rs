@@ -53,8 +53,9 @@ pub fn problems(config: &str, toolchain: &str) -> Result<Vec<String>, String> {
         problems.push("[unstable] must enable codegen-backend".to_owned());
     }
     let development = table_value(config, "profile.dev", "codegen-backend")?;
-    if development.as_deref() != Some("\"cranelift\"") {
-        problems.push("[profile.dev] must select the Cranelift codegen backend".to_owned());
+    if !matches!(development.as_deref(), None | Some("\"llvm\"")) {
+        problems
+            .push("[profile.dev] must leave the codegen backend unset or select LLVM".to_owned());
     }
     let component = format!("\"{CRANELIFT_COMPONENT}\"");
     if !toolchain

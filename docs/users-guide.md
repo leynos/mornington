@@ -36,8 +36,8 @@ changing the toolchain or borrow-centric APIs.
 ## Rust Build Standard
 
 Development builds use nightly `-Zthreads=8` for the parallel rustc frontend
-and Cranelift for debug code generation. On Linux, the checked-in Cargo
-configuration adds `-C link-arg=-fuse-ld=mold`; other platforms omit this
+and LLVM, the default, for debug code generation. On Linux, the checked-in
+Cargo configuration adds `-C link-arg=-fuse-ld=mold`; other platforms omit this
 linker selection. Before building on a fresh Linux checkout, run
 `make install-build-tools` to install the pinned toolchain and
 checksum-verified mold binary, then run `make check-build-tools` to verify the
