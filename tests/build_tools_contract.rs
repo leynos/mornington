@@ -24,18 +24,28 @@ const LINKER_HASHES: &str = include_str!(concat!(
 /// The preflight must run before every development Cargo target can build.
 #[test]
 fn development_targets_require_the_build_preflight() {
-    for target in ["build", "test", "lint", "typecheck"] {
+    assert_targets_require_preflight(&["build", "test", "lint", "typecheck"]);
+    assert!(
+        MAKEFILE.contains("coverage: check-coverage-tools"),
+        "coverage must require its LLVM-aware prerequisite probe"
+    );
+    assert_targets_skip_preflight(&["fmt", "check-fmt"]);
+}
+
+/// Each development target declares `check-build-tools` as a prerequisite.
+fn assert_targets_require_preflight(targets: &[&str]) {
+    for target in targets {
         let declaration = format!("{target}: check-build-tools");
         assert!(
             MAKEFILE.contains(&declaration),
             "make {target} must require check-build-tools before Cargo commands"
         );
     }
-    assert!(
-        MAKEFILE.contains("coverage: check-coverage-tools"),
-        "coverage must require its LLVM-aware prerequisite probe"
-    );
-    for target in ["fmt", "check-fmt"] {
+}
+
+/// Each formatting target declares no compiler or linker preflight.
+fn assert_targets_skip_preflight(targets: &[&str]) {
+    for target in targets {
         let declaration = format!("{target}: check-build-tools");
         assert!(
             !MAKEFILE.contains(&declaration),

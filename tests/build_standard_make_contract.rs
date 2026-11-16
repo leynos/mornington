@@ -52,16 +52,21 @@ fn evaluated_test_routes_retain_every_standard_flag() -> Result<(), String> {
     if commands.is_empty() {
         return Err("the evaluated test route produced no Cargo commands".to_owned());
     }
-    for command in commands {
-        let Assignment::Flags(flags, inherits) = command else {
-            return Err("an evaluated test Cargo command does not assign RUSTFLAGS".to_owned());
-        };
-        if !inherits {
-            return Err("an evaluated test Cargo command drops caller RUSTFLAGS".to_owned());
-        }
-        flags.meets(pin, true)?;
+    commands
+        .into_iter()
+        .try_for_each(|command| ensure_command_keeps_standard_flags(command, pin))
+}
+
+/// Requires one evaluated Cargo command to assign `RUSTFLAGS`, keep the caller's
+/// flags and meet the pin's standard.
+fn ensure_command_keeps_standard_flags(command: Assignment, pin: Pin) -> Result<(), String> {
+    let Assignment::Flags(flags, inherits) = command else {
+        return Err("an evaluated test Cargo command does not assign RUSTFLAGS".to_owned());
+    };
+    if !inherits {
+        return Err("an evaluated test Cargo command drops caller RUSTFLAGS".to_owned());
     }
-    Ok(())
+    flags.meets(pin, true)
 }
 
 /// The build prerequisite is a real ordering boundary: when it fails, the

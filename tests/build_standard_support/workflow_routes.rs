@@ -38,25 +38,63 @@ fn jobs(name: WorkflowName<'_>, workflow: WorkflowText<'_>) -> Result<Vec<Job>, 
     let Some(jobs_at) = jobs_mapping_start(&lines) else {
         return Err(format!("{}: no top-level jobs mapping", name.0));
     };
-    let mut result = Vec::new();
-    let mut at = jobs_at + 1;
-    while at < lines.len() {
-        let line = job_source_line(name, &lines, at)?;
-        if ends_jobs_mapping(line) {
-            break;
-        }
-        if is_job_mapping_entry(line) {
-            let (job, end) = read_job(name, &lines, at, line)?;
-            result.push(job);
-            at = end;
-            continue;
-        }
-        at += 1;
-    }
+    let result = read_jobs(name, &lines, jobs_at + 1)?;
     if result.is_empty() {
         return Err(format!("{}: jobs mapping contains no jobs", name.0));
     }
     Ok(result)
+}
+
+/// Reads every job from `start` until the top-level jobs mapping closes.
+fn read_jobs(name: WorkflowName<'_>, lines: &[&str], start: usize) -> Result<Vec<Job>, String> {
+    let mut result = Vec::new();
+    let mut at = start;
+    while at < lines.len() {
+        match jobs_step(name, lines, at)? {
+            JobsStep::End => break,
+            JobsStep::Skip => at += 1,
+            JobsStep::Job(job, end) => {
+                result.push(job);
+                at = end;
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// What the line at one offset of the jobs mapping contributes.
+enum JobsStep {
+    /// A top-level line closes the jobs mapping.
+    End,
+    /// The line opens no job; move on to the next one.
+    Skip,
+    /// The line opens a job, which ends at the given exclusive offset.
+    Job(Job, usize),
+}
+
+/// Classifies the line at `at` and reads the job it opens, if any.
+fn jobs_step(name: WorkflowName<'_>, lines: &[&str], at: usize) -> Result<JobsStep, String> {
+    let line = job_source_line(name, lines, at)?;
+    if ends_jobs_mapping(line) {
+        return Ok(JobsStep::End);
+    }
+    Ok(match read_job_if_entry(name, lines, at, line)? {
+        Some((job, end)) => JobsStep::Job(job, end),
+        None => JobsStep::Skip,
+    })
+}
+
+/// Reads the job opened by `line`, or returns `None` when `line` opens no job.
+fn read_job_if_entry(
+    name: WorkflowName<'_>,
+    lines: &[&str],
+    at: usize,
+    line: SourceLine<'_>,
+) -> Result<Option<(Job, usize)>, String> {
+    if !is_job_mapping_entry(line) {
+        return Ok(None);
+    }
+    read_job(name, lines, at, line).map(Some)
 }
 
 /// Finds the source line that opens the top-level jobs mapping.

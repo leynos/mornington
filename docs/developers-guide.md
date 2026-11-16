@@ -89,10 +89,16 @@ Fix findings at their source. A narrowly scoped exception needs a reason and
 must preserve the rule everywhere else. Keep cognitive complexity at 9,
 arguments at 4, lines at 70, and nesting at 4. Inject environment access through
 `mockable::Env` rather than reading or mutating the process environment
-outside the production composition root. The dated toolchain and its required
-components are recorded in `rust-toolchain.toml`; run
-`make install-build-tools` and `make check-build-tools` before development
-builds on a fresh checkout.
+outside the production composition root. `clippy.toml` also disallows
+`std::env::set_var`, `remove_var` and `set_current_dir`: pass a directory in,
+or use `Command::current_dir` for a child process, rather than changing the
+process's own working directory, which forces tests to run one at a time.
+Helpers extracted to keep a function short, such as the workflow and Make
+probes in `tests/build_standard_support`, are private to their module and carry
+a one-line description; promote one to shared support before a second module
+calls it. The dated toolchain and its required components are recorded in
+`rust-toolchain.toml`; run `make install-build-tools` and
+`make check-build-tools` before development builds on a fresh checkout.
 
 ### Polonius borrow checker
 
