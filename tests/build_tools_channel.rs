@@ -52,8 +52,9 @@ fn scoped_calls(calls: &str) -> Vec<&str> {
         .collect()
 }
 
-#[test]
-fn scripts_follow_the_channel_in_the_toolchain_file() -> Result<(), String> {
+/// Rewrites the pinned channel, runs the install and check scripts, and returns
+/// the recorded calls with the channel the fixture started from.
+fn run_scripts_on_rewritten_channel() -> Result<(String, String), String> {
     let fixture = ScriptFixture::new()?;
     let original = rewrite_channel(&fixture)?;
     ensure(fixture.pinned_channel()? == CHANNEL, || {
@@ -62,24 +63,41 @@ fn scripts_follow_the_channel_in_the_toolchain_file() -> Result<(), String> {
     run_ok(&fixture, ScriptName::Install)?;
     run_ok(&fixture, ScriptName::Check)?;
     let calls = fixture.read(Utf8Path::new("commands.log"))?;
-    let scoped = scoped_calls(&calls);
+    Ok((calls, original))
+}
+
+/// Requires the install and both probes to be scoped, and every scoped call to
+/// name the rewritten channel.
+fn ensure_scoped_calls_name_the_channel(calls: &str) -> Result<(), String> {
+    let scoped = scoped_calls(calls);
     ensure(scoped.len() >= 3, || {
         format!("expected install and both probes, found {scoped:?}")
     })?;
     ensure(scoped.iter().all(|line| line.contains(CHANNEL)), || {
         format!("every scoped call must name {CHANNEL}: {scoped:?}")
-    })?;
-    // Each expected command, with the channel in its own argument position.
-    for expected in [
+    })
+}
+
+/// Requires each expected command, with the channel in its own argument position.
+fn ensure_expected_commands_ran(calls: &str) -> Result<(), String> {
+    let expected_commands = [
         format!("rustup toolchain install {CHANNEL} "),
         format!("rustup run {CHANNEL} rustc --version"),
         format!("rustup run {CHANNEL} rustc -vV"),
         format!("rustup component list --toolchain {CHANNEL} "),
-    ] {
-        ensure(calls.contains(&expected), || {
+    ];
+    expected_commands.iter().try_for_each(|expected| {
+        ensure(calls.contains(expected), || {
             format!("missing {expected:?} in the recorded calls: {calls}")
-        })?;
-    }
+        })
+    })
+}
+
+#[test]
+fn scripts_follow_the_channel_in_the_toolchain_file() -> Result<(), String> {
+    let (calls, original) = run_scripts_on_rewritten_channel()?;
+    ensure_scoped_calls_name_the_channel(&calls)?;
+    ensure_expected_commands_ran(&calls)?;
     ensure(!calls.contains(&original), || {
         format!("the original channel {original} must not be used: {calls}")
     })

@@ -133,22 +133,8 @@ pub fn evaluated_test_commands() -> Result<Vec<Assignment>, String> {
     if !act.contains("act pull_request") {
         return Err("WITH_ACT conditional was not evaluated by make --dry-run test".to_owned());
     }
-    let mut commands = Vec::new();
-    for output in [&normal, &act] {
-        let expected = output
-            .replace("\\\n", " ")
-            .lines()
-            .filter(|line| line.contains("probe-cargo"))
-            .count();
-        let parsed = commands_from(output)?;
-        if parsed.len() != expected {
-            return Err(format!(
-                "parsed {} Cargo commands from {expected} evaluated probe-cargo invocations",
-                parsed.len()
-            ));
-        }
-        commands.extend(parsed);
-    }
+    let mut commands = checked_probe_commands(&normal)?;
+    commands.extend(checked_probe_commands(&act)?);
     if commands.len() < 4 {
         return Err(
             "both test conditional branches must retain nextest and doctest Cargo commands"
@@ -156,6 +142,23 @@ pub fn evaluated_test_commands() -> Result<Vec<Assignment>, String> {
         );
     }
     Ok(commands)
+}
+
+/// Parses one evaluated branch's Cargo commands, requiring one per probe-cargo line.
+fn checked_probe_commands(output: &str) -> Result<Vec<Assignment>, String> {
+    let expected = output
+        .replace("\\\n", " ")
+        .lines()
+        .filter(|line| line.contains("probe-cargo"))
+        .count();
+    let parsed = commands_from(output)?;
+    if parsed.len() == expected {
+        return Ok(parsed);
+    }
+    Err(format!(
+        "parsed {} Cargo commands from {expected} evaluated probe-cargo invocations",
+        parsed.len()
+    ))
 }
 
 /// Proves the real prerequisite ordering with a harmless controlled failure.
