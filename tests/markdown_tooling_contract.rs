@@ -203,25 +203,27 @@ fn pattern_entries(
     Ok(patterns)
 }
 
+/// Maps the character after a backslash to the character it escapes.
+fn escape_replacement(character: char) -> Result<char, String> {
+    match character {
+        '\\' => Ok('\\'),
+        '"' => Ok('"'),
+        'n' => Ok('\n'),
+        'r' => Ok('\r'),
+        't' => Ok('\t'),
+        _ => Err(format!(
+            "the generated pattern has an unsupported escape \\{character}"
+        )),
+    }
+}
+
 /// Decodes supported TOML string escapes in a generated regular expression.
 fn unescape_generated_pattern(pattern: Text<'_>) -> Result<String, String> {
     let mut escaped = false;
     let mut unescaped = String::new();
     for character in pattern.0.chars() {
         if escaped {
-            let replacement = match character {
-                '\\' => '\\',
-                '"' => '"',
-                'n' => '\n',
-                'r' => '\r',
-                't' => '\t',
-                _ => {
-                    return Err(format!(
-                        "the generated pattern has an unsupported escape \\{character}"
-                    ));
-                }
-            };
-            unescaped.push(replacement);
+            unescaped.push(escape_replacement(character)?);
             escaped = false;
         } else if character == '\\' {
             escaped = true;
