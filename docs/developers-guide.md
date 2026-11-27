@@ -406,11 +406,11 @@ fails on a hard-coded nightly.
 `make lint` runs `make yamllint` and `make actionlint` as prerequisites.
 `make yamllint` runs `yamllint --strict` over every tracked `.yml` and `.yaml`
 file, reading `.yamllint.yml`, which extends the estate base
-`.yamllint-estate.yml` (a verbatim copy of the estate canon; do not edit
-it). The base ignores Helm chart templates (`**/charts/**/templates/`), so a
-tracked file there is passed to yamllint but not checked, and a local `ignore`
-in `.yamllint.yml` replaces that entry rather than adding to it. Run it from
-the repository root, because yamllint resolves `extends` against the current
+`.yamllint-estate.yml` (a verbatim copy of the estate canon; do not edit it).
+The base ignores Helm chart templates (`**/charts/**/templates/`), so a tracked
+file there is passed to yamllint but not checked, and a local `ignore` in
+`.yamllint.yml` replaces that entry rather than adding to it. Run it from the
+repository root, because yamllint resolves `extends` against the current
 directory. `make actionlint` checks the GitHub Actions workflows, accepting the
 runner labels in `.github/actionlint.yaml`, and runs ShellCheck over their Bash
 and `sh` `run:` scripts when it is on `PATH` (it skips PowerShell steps).
