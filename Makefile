@@ -157,7 +157,7 @@ check-build-tools: ## Verify development build prerequisites
 check-coverage-tools: ## Verify LLVM coverage prerequisites
 	$(CHECK_BUILD_TOOLS) --coverage
 
-lint: check-build-tools ## Run Rust and Python lint gateways sequentially
+lint: check-build-tools yamllint actionlint ## Run Rust and Python lint gateways sequentially
 	+$(MAKE) lint-clippy
 	+$(MAKE) lint-whitaker
 	+$(MAKE) lint-python
@@ -250,3 +250,18 @@ rust-audit: ## Audit the Rust workspace for known vulnerabilities
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
 	awk 'BEGIN {FS=":"; printf "Available targets:\n"} {printf "  %-20s %s\n", $$1, $$2}'
+
+YAMLLINT ?= yamllint
+ACTIONLINT ?= actionlint
+
+.PHONY: yamllint actionlint
+
+# yamllint reads `.yamllint.yml`, which extends `.yamllint-estate.yml`, and
+# resolves that path against the current directory, so run it from the root.
+yamllint: SHELL := bash
+yamllint: .SHELLFLAGS := -eo pipefail -c
+yamllint: ## Lint every tracked YAML file strictly
+	git ls-files -z '*.yml' '*.yaml' | xargs -0 -r $(YAMLLINT) --strict --
+
+actionlint: ## Lint the GitHub Actions workflows (and their shell scripts when ShellCheck is on PATH)
+	$(ACTIONLINT)

@@ -68,7 +68,7 @@ fn composite_and_lint_routes_recurse_in_order() {
         MAKEFILE.contains(all),
         "make all must recurse through every gate in order rather than parallel prerequisites"
     );
-    let lint = "lint: check-build-tools ## Run Rust and Python lint gateways \
+    let lint = "lint: check-build-tools yamllint actionlint ## Run Rust and Python lint gateways \
                 sequentially\n\t+$(MAKE) lint-clippy\n\t+$(MAKE) lint-whitaker\n\t+$(MAKE) \
                 lint-python";
     assert!(
