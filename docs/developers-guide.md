@@ -406,7 +406,7 @@ fails on a hard-coded nightly.
 `make lint` runs `make yamllint` and `make actionlint` as prerequisites.
 `make yamllint` runs `yamllint --strict` over every tracked `.yml` and `.yaml`
 file, reading `.yamllint.yml`, which extends the estate base
-`.yamllint-estate.yml` (a verbatim copy of the concordat canon; do not edit
+`.yamllint-estate.yml` (a verbatim copy of the estate canon; do not edit
 it). The base ignores Helm chart templates (`**/charts/**/templates/`), so a
 tracked file there is passed to yamllint but not checked, and a local `ignore`
 in `.yamllint.yml` replaces that entry rather than adding to it. Run it from
